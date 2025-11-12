@@ -20,5 +20,25 @@ if (import.meta.hot) {
     window.parent?.postMessage({ type: 'sandbox:afterUpdate' }, '*');
   });
 }
+import { supabase } from './api/supabaseClient';
+
+async function testSupabase() {
+  const { data, error } = await supabase.from('company_profiles').select('*');
+  console.log('Supabase test:', { data, error });
+}
+
+testSupabase();
+import { authApi } from './api/authApi';
+
+async function testAuth() {
+  try {
+    const res = await authApi.signUp("test@example.com", "password123");
+    console.log("Signup OK:", res);
+  } catch (err) {
+    console.error("Signup error:", err.message);
+  }
+}
+
+testAuth();
 
 

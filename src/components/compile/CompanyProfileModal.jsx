@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { companyProfilesApi } from "@/api/companyProfilesApi";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -159,16 +159,16 @@ export default function CompanyProfileModal({ onClose, onSave, existingProfile =
   });
 
   const saveProfileMutation = useMutation({
-    mutationFn: (data) => {
+    mutationFn: async (data) => {
       if (existingProfile) {
-        return base44.entities.CompanyProfile.update(existingProfile.id, data);
+        return await companyProfilesApi.update(existingProfile.id, data);
       }
-      return base44.entities.CompanyProfile.create(data);
+      return await companyProfilesApi.create(data);
     },
     onSuccess: () => {
       onSave();
     },
-  });
+  });  
 
   const handleChange = (field, value) => {
     setProfileData(prev => ({ ...prev, [field]: value }));
