@@ -1,8 +1,10 @@
+import AuthPage from "@/pages/AuthPage";
 import React from "react";
-import { Link, useLocation, Routes, Route } from "react-router-dom";
+import { Link, useLocation, Routes, Route, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { FileText, User, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Profile from "@/pages/Profile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 
 // Pagine
 import Home from "@/pages/Home";
@@ -20,27 +22,92 @@ import CompileDocument from "@/pages/CompileDocument";
 
 export default function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = React.useState(null);
+  const [userProfile, setUserProfile] = React.useState(null);
 
   React.useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await base44.auth.me();
-        setUser(currentUser);
-      } catch (error) {
+    const getUser = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Errore caricamento utente:", error.message);
         setUser(null);
+        setUserProfile(null);
+        return;
+      }
+      setUser(user);
+      
+      // Carica profilo utente se esiste
+      if (user) {
+        try {
+          const { data: profile } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("user_id", user.id)
+            .single();
+          setUserProfile(profile);
+        } catch (err) {
+          // Se la tabella non esiste o non ci sono dati, continua senza errore
+          console.log("Profilo utente non trovato");
+        }
       }
     };
-    loadUser();
+  
+    getUser();
+  
+    // 🔄 Ascolta i cambiamenti di stato (login / logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        // Carica profilo utente
+        try {
+          const { data: profile } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("user_id", session.user.id)
+            .single();
+          setUserProfile(profile);
+        } catch (err) {
+          setUserProfile(null);
+        }
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
+    });
+  
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogout = () => {
-    base44.auth.logout();
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const getInitials = (name) => {
     if (!name) return "U";
     return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  };
+
+  // Helper per ottenere il nome completo dell'utente
+  const getUserFullName = () => {
+    if (userProfile?.nome && userProfile?.cognome) {
+      return `${userProfile.nome} ${userProfile.cognome}`;
+    }
+    if (user?.user_metadata?.full_name) {
+      return user.user_metadata.full_name;
+    }
+    if (user?.email) {
+      return user.email.split("@")[0];
+    }
+    return "Utente";
+  };
+
+  // Helper per ottenere il tipo di sottoscrizione
+  const getSubscriptionType = () => {
+    return userProfile?.subscription_type || user?.user_metadata?.subscription_type || "free";
   };
 
   return (
@@ -79,7 +146,7 @@ export default function Layout() {
                         <Avatar className="w-10 h-10 border-2 border-indigo-200">
                           {/* @ts-ignore */}
                           <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-blue-500 text-white font-semibold">
-                            {getInitials(user.full_name)}
+                            {getInitials(getUserFullName())}
                           </AvatarFallback>
                         </Avatar>
                       </Button>
@@ -87,21 +154,21 @@ export default function Layout() {
                     {/* @ts-ignore */}
                     <DropdownMenuContent align="end" className="w-56">
                       <div className="px-3 py-2">
-                        <p className="font-semibold text-gray-900">{user.full_name}</p>
+                        <p className="font-semibold text-gray-900">{getUserFullName()}</p>
                         <p className="text-sm text-gray-500">{user.email}</p>
                         <div className="mt-2">
                           <span
                             className={`inline-block px-2 py-1 text-xs rounded-full ${
-                              user.subscription_type === "premium"
+                              getSubscriptionType() === "premium"
                                 ? "bg-gradient-to-r from-amber-400 to-orange-400 text-white"
-                                : user.subscription_type === "registered"
+                                : getSubscriptionType() === "registered"
                                 ? "bg-blue-100 text-blue-700"
                                 : "bg-gray-100 text-gray-700"
                             }`}
                           >
-                            {user.subscription_type === "premium"
+                            {getSubscriptionType() === "premium"
                               ? "⭐ Premium"
-                              : user.subscription_type === "registered"
+                              : getSubscriptionType() === "registered"
                               ? "Registrato"
                               : "Gratuito"}
                           </span>
@@ -137,7 +204,7 @@ export default function Layout() {
               ) : (
                 // @ts-ignore
                 <Button
-                  onClick={() => base44.auth.redirectToLogin()}
+                  onClick={() => navigate("/auth")}
                   className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
                 >
                   Accedi
@@ -152,8 +219,10 @@ export default function Layout() {
       <main className="pt-20">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Home />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route path="/generate-document" element={<GenerateDocument />} />
           <Route path="/compile-document" element={<CompileDocument />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </main>
     </div>
