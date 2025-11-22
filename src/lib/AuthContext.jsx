@@ -10,9 +10,20 @@ export const AuthProvider = ({ children }) => {
   // Recupera l'utente attuale all'avvio
   useEffect(() => {
     const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data?.user ?? null);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.warn('Errore nel recupero utente:', error.message);
+          setUser(null);
+        } else {
+          setUser(data?.user ?? null);
+        }
+      } catch (err) {
+        console.error('Errore imprevisto nel recupero utente:', err);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
     getUser();
@@ -22,7 +33,11 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      if (listener?.subscription) {
+        listener.subscription.unsubscribe();
+      }
+    };
   }, []);
 
   // Azioni disponibili nel contesto
@@ -36,7 +51,16 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Caricamento...</p>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 };

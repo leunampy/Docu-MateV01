@@ -11,6 +11,7 @@ import UseSavedDataBox from "@/components/questionnaire/UseSavedDataBox";
 import CompanySelector from "@/components/questionnaire/CompanySelector";
 
 import { DOCUMENT_SCHEMAS } from "@/data/documentSchemas";
+import { callAI } from "@/lib/ai";
 
 export default function QuestionnaireForm({
   documentType,
@@ -203,23 +204,40 @@ export default function QuestionnaireForm({
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/generate-document", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: documentType.id,
-          answers,
-        }),
+      // Build prompt for document generation
+      const prompt = `Sei un assistente legale specializzato nella redazione di documenti legali italiani.
+
+Devi generare un documento di tipo: ${documentType.name}
+
+Dati forniti:
+${JSON.stringify(answers, null, 2)}
+
+ISTRUZIONI:
+1. Genera un documento legale completo e professionale in italiano
+2. Utilizza tutti i dati forniti per compilare il documento
+3. Segui le norme e le convenzioni legali italiane
+4. Il documento deve essere formattato correttamente e pronto per l'uso
+5. Includi tutte le clausole standard necessarie per questo tipo di documento
+6. Assicurati che il documento sia completo e legalmente valido
+
+Genera il documento:`;
+
+      const generatedText = await callAI(prompt);
+
+      if (!generatedText || generatedText.includes("❌ Errore")) {
+        throw new Error(generatedText || "Errore durante la generazione del documento");
+      }
+
+      onDocumentGenerated({
+        text: generatedText,
+        type_name: documentType.name,
+        document_type: documentType.id,
       });
-
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-
-      onDocumentGenerated(result.document);
     } catch (err) {
-      onError(err.message);
+      onError(err.message || "Errore durante la generazione del documento. Riprova.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

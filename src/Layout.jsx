@@ -2,7 +2,7 @@ import AuthPage from "@/pages/AuthPage";
 import React from "react";
 import { Link, useLocation, Routes, Route, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { FileText, User, Settings, LogOut } from "lucide-react";
+import { FileText, User, Settings as SettingsIcon, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Profile from "@/pages/Profile";
 import {
@@ -19,6 +19,7 @@ import { supabase } from "@/api/supabaseClient";
 import Home from "@/pages/Home";
 import GenerateDocument from "@/pages/GenerateDocument";
 import CompileDocument from "@/pages/CompileDocument";
+import Settings from "@/pages/Settings";
 
 export default function Layout() {
   const location = useLocation();
@@ -134,7 +135,7 @@ export default function Layout() {
                   <Link to={createPageUrl("Settings")}>
                     {/* @ts-ignore */}
                     <Button variant="ghost" size="icon" className="hover:bg-gray-100 rounded-xl">
-                      <Settings className="w-5 h-5 text-gray-600" />
+                      <SettingsIcon className="w-5 h-5 text-gray-600" />
                     </Button>
                   </Link>
 
@@ -185,7 +186,7 @@ export default function Layout() {
                       {/* @ts-ignore */}
                       <DropdownMenuItem asChild>
                         <Link to={createPageUrl("Settings")} className="cursor-pointer">
-                          <Settings className="w-4 h-4 mr-2" />
+                          <SettingsIcon className="w-4 h-4 mr-2" />
                           Impostazioni
                         </Link>
                       </DropdownMenuItem>
@@ -223,6 +224,7 @@ export default function Layout() {
           <Route path="/generate-document" element={<GenerateDocument />} />
           <Route path="/compile-document" element={<CompileDocument />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
     </div>

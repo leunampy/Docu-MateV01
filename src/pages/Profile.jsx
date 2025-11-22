@@ -1,435 +1,678 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
-export default function Profile() {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState({});
-  const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState(null);
-  const [newCompany, setNewCompany] = useState({});
-  const [isEditingCompany, setIsEditingCompany] = useState(false);
-  const [docList, setDocList] = useState([]);
-  const [activeTab, setActiveTab] = useState("personale");
-  const [saving, setSaving] = useState(false);
+import { User, Building2, FileText, CreditCard, Plus, Trash2 } from "lucide-react";
 
-  // 🔹 Carica dati utente
-  useEffect(() => {
-    const fetchData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
+export default function ProfilePage() {
+  const authContext = useAuth();
+  
+  // Controllo di sicurezza per evitare errori se il contesto non è disponibile
+  if (!authContext) {
+    return (
+      <div className="text-center py-20 text-gray-500">
+        Caricamento...
+      </div>
+    );
+  }
+  
+  const user = authContext.user;
 
-      if (user) {
-        // profilo personale
-        const { data: personal, error: personalError } = await supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-        if (personalError) {
-          console.error("Errore nel caricamento del profilo personale:", personalError);
-        }
-        if (personal) setProfile(personal);
+  const [activeTab, setActiveTab] = useState("personal");
 
-        // profili aziendali
-        const { data: companyList, error: companyError } = await supabase
-          .from("company_profiles")
-          .select("*")
-          .eq("user_id", user.id);
-        if (companyError) {
-          console.error("Errore nel caricamento dei profili aziendali:", companyError);
-        }
-        if (companyList) setCompanies(companyList);
+  // PERSONAL (multi)
+  const [personalProfiles, setPersonalProfiles] = useState([]);
+  const [selectedPersonalId, setSelectedPersonalId] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loadingProfileList, setLoadingProfileList] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
 
-        // documenti
-        const { data: docs, error: docsError } = await supabase
-          .from("documents")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-        if (docsError) {
-          console.error("Errore nel caricamento dei documenti:", docsError);
-        }
-        if (docs) setDocList(docs);
-      }
-    };
+  // COMPANY (multi)
+  const [companyProfiles, setCompanyProfiles] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const [companyProfile, setCompanyProfile] = useState(null);
+  const [loadingCompanyList, setLoadingCompanyList] = useState(true);
+  const [savingCompany, setSavingCompany] = useState(false);
 
-    fetchData();
-  }, []);
+  // stats
+  const [documentCount, setDocumentCount] = useState(0);
 
-  // 🔹 Salva profilo personale
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("user_profiles")
-        .upsert([{ ...profile, user_id: user.id }]);
-      if (error) {
-        console.error("Errore nel salvataggio del profilo:", error);
-        alert("Errore nel salvataggio del profilo");
-      } else {
-        alert("Profilo salvato con successo!");
-      }
-    } catch (err) {
-      console.error("Errore imprevisto nel salvataggio del profilo:", err);
-      alert("Errore nel salvataggio del profilo");
-    } finally {
-      setSaving(false);
+  // ---------- HELPERS ----------
+  function getInitials(emailOrName) {
+    if (!emailOrName) return "U";
+    const parts = emailOrName.split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-  };
+    return emailOrName[0].toUpperCase();
+  }
 
-  // 🔹 Gestione aziendale
-  const handleNewCompany = () => {
-    setNewCompany({
-      ragione_sociale: "",
-      forma_giuridica: "",
-      partita_iva: "",
-      codice_fiscale: "",
-      indirizzo: "",
-      citta: "",
-      provincia: "",
-      cap: "",
-      user_id: user.id,
-    });
-    setSelectedCompany(null);
-    setIsEditingCompany(true);
-  };
+  function setField(field, value) {
+    setProfile((prev) => ({ ...(prev || {}), [field]: value }));
+  }
 
-  const handleEditCompany = (company) => {
-    setNewCompany(company);
-    setSelectedCompany(company);
-    setIsEditingCompany(true);
-  };
+  function setCompanyField(field, value) {
+    setCompanyProfile((prev) => ({ ...(prev || {}), [field]: value }));
+  }
 
-  const handleSaveCompany = async () => {
-    if (!newCompany.ragione_sociale) {
-      alert("Inserisci la ragione sociale");
+  // ---------- LOAD LISTS ----------
+  async function loadPersonalProfiles() {
+    if (!user?.id) return;
+    setLoadingProfileList(true);
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Errore caricamento profili personali:", error);
+      setPersonalProfiles([]);
+    } else {
+      setPersonalProfiles(data || []);
+      // if no selection, set primary profile if exists
+      if (!selectedPersonalId) {
+        const primary = data && data.length ? data[0] : null;
+        if (primary) {
+          setSelectedPersonalId(primary.id);
+          setProfile(primary);
+        } else {
+          setProfile({});
+        }
+      } else {
+        // try to keep selected loaded
+        const sel = (data || []).find((p) => p.id === selectedPersonalId);
+        if (sel) setProfile(sel);
+      }
+    }
+    setLoadingProfileList(false);
+  }
+
+  async function loadCompanyProfiles() {
+    if (!user?.id) return;
+    setLoadingCompanyList(true);
+    const { data, error } = await supabase
+      .from("company_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Errore caricamento profili aziendali:", error);
+      setCompanyProfiles([]);
+    } else {
+      setCompanyProfiles(data || []);
+      if (!selectedCompanyId) {
+        const primary = data && data.length ? data[0] : null;
+        if (primary) {
+          setSelectedCompanyId(primary.id);
+          setCompanyProfile(primary);
+        } else {
+          setCompanyProfile({});
+        }
+      } else {
+        const sel = (data || []).find((c) => c.id === selectedCompanyId);
+        if (sel) setCompanyProfile(sel);
+      }
+    }
+    setLoadingCompanyList(false);
+  }
+
+  // ---------- STATS ----------
+  async function loadDocumentStats() {
+    if (!user?.id) return;
+    const { count, error } = await supabase
+      .from("documents")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Errore conteggio documenti:", error);
       return;
     }
 
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("company_profiles")
-        .upsert([{ ...newCompany, user_id: user.id }]);
+    setDocumentCount(count || 0);
+  }
 
-      if (error) {
-        console.error("Errore nel salvataggio dell'azienda:", error);
-        alert("Errore nel salvataggio dell'azienda");
-        return;
-      }
-
-      alert("Profilo aziendale salvato con successo!");
-      setIsEditingCompany(false);
-
-      // aggiorna lista aziende
-      const { data: updatedCompanies, error: refreshError } = await supabase
-        .from("company_profiles")
-        .select("*")
-        .eq("user_id", user.id);
-      
-      if (refreshError) {
-        console.error("Errore nell'aggiornamento della lista aziende:", refreshError);
-      } else {
-        setCompanies(updatedCompanies || []);
-      }
-    } catch (err) {
-      console.error("Errore imprevisto nel salvataggio dell'azienda:", err);
-      alert("Errore nel salvataggio dell'azienda");
-    } finally {
-      setSaving(false);
+  // initial load
+  useEffect(() => {
+    if (user?.id) {
+      loadPersonalProfiles();
+      loadCompanyProfiles();
+      loadDocumentStats();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // when selected id changes, set the object
+  useEffect(() => {
+    if (selectedPersonalId) {
+      const p = personalProfiles.find((x) => x.id === selectedPersonalId);
+      setProfile(p ? { ...p } : {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPersonalId, personalProfiles]);
+
+  useEffect(() => {
+    if (selectedCompanyId) {
+      const c = companyProfiles.find((x) => x.id === selectedCompanyId);
+      setCompanyProfile(c ? { ...c } : {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompanyId, companyProfiles]);
+
+  // ---------- CREATE new profiles ----------
+  async function createNewPersonalProfile() {
+    if (!user?.id) return;
+    const payload = {
+      user_id: user.id,
+      nome: "Nuovo profilo",
+      cognome: "",
+    };
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .insert(payload)
+      .select()
+      .single();
+    if (error) {
+      console.error("Errore creazione profilo personale:", error);
+      alert("Errore creazione profilo personale");
+      return;
+    }
+    await loadPersonalProfiles();
+    setSelectedPersonalId(data.id);
+  }
+
+  async function createNewCompanyProfile() {
+    if (!user?.id) return;
+    const payload = {
+      user_id: user.id,
+      ragione_sociale: "Nuova azienda",
+    };
+    const { data, error } = await supabase
+      .from("company_profiles")
+      .insert(payload)
+      .select()
+      .single();
+    if (error) {
+      console.error("Errore creazione profilo aziendale:", error);
+      alert("Errore creazione profilo aziendale");
+      return;
+    }
+    await loadCompanyProfiles();
+    setSelectedCompanyId(data.id);
+  }
+
+  // ---------- DELETE ----------
+  async function deletePersonalProfile(id) {
+    if (!id) return;
+    if (!confirm("Eliminare questo profilo personale?")) return;
+    const { error } = await supabase.from("user_profiles").delete().eq("id", id);
+    if (error) {
+      console.error("Errore eliminazione profilo personale:", error);
+      alert("Errore eliminazione profilo personale");
+      return;
+    }
+    // reload and clear selection
+    await loadPersonalProfiles();
+    setSelectedPersonalId((prev) => {
+      if (prev === id) return personalProfiles.length ? personalProfiles[0]?.id : null;
+      return prev;
+    });
+  }
+
+  async function deleteCompanyProfile(id) {
+    if (!id) return;
+    if (!confirm("Eliminare questo profilo aziendale?")) return;
+    const { error } = await supabase.from("company_profiles").delete().eq("id", id);
+    if (error) {
+      console.error("Errore eliminazione profilo aziendale:", error);
+      alert("Errore eliminazione profilo aziendale");
+      return;
+    }
+    await loadCompanyProfiles();
+    setSelectedCompanyId((prev) => {
+      if (prev === id) return companyProfiles.length ? companyProfiles[0]?.id : null;
+      return prev;
+    });
+  }
+
+  // ---------- SAVE / UPSERT ----------
+  async function savePersonalProfile() {
+    if (!user?.id || !profile) return;
+    setSavingProfile(true);
+    const payload = { ...profile, user_id: user.id };
+
+    try {
+      if (profile.id) {
+        const { error } = await supabase
+          .from("user_profiles")
+          .update(payload)
+          .eq("id", profile.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        setProfile(data);
+        setSelectedPersonalId(data.id);
+      }
+      await loadPersonalProfiles();
+      alert("Profilo personale salvato");
+    } catch (err) {
+      console.error(err);
+      alert("Errore salvataggio profilo personale");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function saveCompanyProfile() {
+    if (!user?.id || !companyProfile) return;
+    setSavingCompany(true);
+    const payload = { ...companyProfile, user_id: user.id };
+
+    try {
+      if (companyProfile.id) {
+        const { error } = await supabase
+          .from("company_profiles")
+          .update(payload)
+          .eq("id", companyProfile.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("company_profiles")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        setCompanyProfile(data);
+        setSelectedCompanyId(data.id);
+      }
+      await loadCompanyProfiles();
+      alert("Profilo aziendale salvato");
+    } catch (err) {
+      console.error(err);
+      alert("Errore salvataggio profilo aziendale");
+    } finally {
+      setSavingCompany(false);
+    }
+  }
+
+  // ---------- RENDER ----------
+  if (!user) {
+    return (
+      <div className="text-center py-20 text-gray-500">
+        Devi effettuare l'accesso per visualizzare il profilo.
+      </div>
+    );
+  }
+
+  const fullName = profile?.nome || profile?.cognome 
+    ? `${profile?.nome || ""} ${profile?.cognome || ""}`.trim() 
+    : (user?.email || "Utente");
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
-      <h1 className="text-3xl font-bold mb-8 text-gray-900">Il Mio Profilo</h1>
+    <div className="max-w-6xl mx-auto px-6 pt-10 pb-20">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-gray-900">Il Mio Profilo</h1>
+        <p className="text-gray-600">Gestisci i tuoi dati e i profili aziendali.</p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* 🔹 Sidebar */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{user?.email}</CardTitle>
-              <p className="text-sm text-gray-500">
-                {profile.nome || "Nome non impostato"}
-              </p>
-            </CardHeader>
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* LEFT */}
+        <div className="w-full lg:w-1/3 space-y-4">
+          <Card className="shadow-sm border border-gray-200">
+            <CardContent className="pt-6 flex flex-col items-center text-center">
+              <Avatar className="w-20 h-20 mb-4">
+                <AvatarFallback className="bg-indigo-600 text-white text-xl">{getInitials(fullName)}</AvatarFallback>
+              </Avatar>
+              <h2 className="text-xl font-semibold text-gray-900 mb-1">{fullName}</h2>
+              <p className="text-gray-500 text-sm mb-3">{user.email}</p>
+              <Badge className="bg-gray-100 text-gray-800 border-gray-200">Gratuito</Badge>
+            </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-sm border border-gray-200">
             <CardHeader>
-              <CardTitle>Statistiche</CardTitle>
+              <CardTitle className="text-base font-semibold">Statistiche</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-600">
-                Documenti Generati:{" "}
-                <span className="font-semibold">{docList.length}</span>
-              </p>
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <p className="text-sm text-gray-600">Documenti generati</p>
+                  <p className="text-xl font-bold text-gray-900">{documentCount}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* 🔹 Contenuto principale */}
-        <div className="lg:col-span-3">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="personale">Personale</TabsTrigger>
-              <TabsTrigger value="aziendale">Aziendale</TabsTrigger>
-              <TabsTrigger value="documenti">Documenti</TabsTrigger>
-              <TabsTrigger value="abbonamento">Abbonamento</TabsTrigger>
-            </TabsList>
+        {/* RIGHT: TABS */}
+        <div className="w-full lg:w-2/3 space-y-4">
+          <Card className="shadow-sm border border-gray-200">
+            <CardContent className="pt-4 pb-2">
+              {/* TABS */}
+              <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+                <button className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 ${activeTab === "personal" ? "border-indigo-600 text-indigo-600 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"}`} onClick={() => setActiveTab("personal")}>
+                  <User className="inline w-4 h-4 mr-1" /> Personale
+                </button>
+                <button className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 ${activeTab === "company" ? "border-indigo-600 text-indigo-600 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"}`} onClick={() => setActiveTab("company")}>
+                  <Building2 className="inline w-4 h-4 mr-1" /> Aziendale
+                </button>
+                <button className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 ${activeTab === "documents" ? "border-indigo-600 text-indigo-600 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"}`} onClick={() => setActiveTab("documents")}>
+                  <FileText className="inline w-4 h-4 mr-1" /> Documenti
+                </button>
+                <button className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 ${activeTab === "billing" ? "border-indigo-600 text-indigo-600 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"}`} onClick={() => setActiveTab("billing")}>
+                  <CreditCard className="inline w-4 h-4 mr-1" /> Abbonamento
+                </button>
+              </div>
 
-            {/* 🔸 PERSONALE */}
-            <TabsContent value="personale">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Dati Personali</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-4">
-                  <Input
-                    placeholder="Nome"
-                    value={profile.nome || ""}
-                    onChange={(e) =>
-                      setProfile({ ...profile, nome: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="Cognome"
-                    value={profile.cognome || ""}
-                    onChange={(e) =>
-                      setProfile({ ...profile, cognome: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="Codice Fiscale"
-                    value={profile.codice_fiscale || ""}
-                    onChange={(e) =>
-                      setProfile({
-                        ...profile,
-                        codice_fiscale: e.target.value,
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder="Telefono"
-                    value={profile.telefono || ""}
-                    onChange={(e) =>
-                      setProfile({ ...profile, telefono: e.target.value })
-                    }
-                  />
-                  <Button
-                    className="col-span-2 mt-4"
-                    onClick={handleSave}
-                    disabled={saving}
-                  >
-                    {saving ? "Salvataggio..." : "Salva Modifiche"}
-                  </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* 🔸 AZIENDALE */}
-            <TabsContent value="aziendale">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Gestione Profili Aziendali</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!isEditingCompany ? (
-                    <>
-                      <div className="flex justify-between items-center mb-4">
-                        <p className="text-gray-500">
-                          Seleziona un profilo aziendale o creane uno nuovo.
-                        </p>
-                        <Button
-                          onClick={handleNewCompany}
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          + Nuovo
-                        </Button>
-                      </div>
-                      {companies.length === 0 ? (
-                        <p className="text-gray-500">
-                          Nessuna azienda associata.
-                        </p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {companies.map((c) => (
-                            <li
-                              key={c.id}
-                              className="border p-3 rounded-lg hover:bg-gray-50 flex justify-between items-center"
-                            >
-                              <div>
-                                <strong>{c.ragione_sociale}</strong> –{" "}
-                                {c.forma_giuridica}
-                              </div>
-                              <Button
-                                variant="outline"
-                                onClick={() => handleEditCompany(c)}
-                              >
-                                Modifica
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <Input
-                        placeholder="Ragione Sociale"
-                        value={newCompany.ragione_sociale || ""}
-                        onChange={(e) =>
-                          setNewCompany({
-                            ...newCompany,
-                            ragione_sociale: e.target.value,
-                          })
-                        }
-                      />
-                      <Input
-                        placeholder="Forma Giuridica (es. SRL, SPA)"
-                        value={newCompany.forma_giuridica || ""}
-                        onChange={(e) =>
-                          setNewCompany({
-                            ...newCompany,
-                            forma_giuridica: e.target.value,
-                          })
-                        }
-                      />
-                      <Input
-                        placeholder="Partita IVA"
-                        value={newCompany.partita_iva || ""}
-                        onChange={(e) =>
-                          setNewCompany({
-                            ...newCompany,
-                            partita_iva: e.target.value,
-                          })
-                        }
-                      />
-                      <Input
-                        placeholder="Codice Fiscale"
-                        value={newCompany.codice_fiscale || ""}
-                        onChange={(e) =>
-                          setNewCompany({
-                            ...newCompany,
-                            codice_fiscale: e.target.value,
-                          })
-                        }
-                      />
-                      <Input
-                        placeholder="Indirizzo"
-                        value={newCompany.indirizzo || ""}
-                        onChange={(e) =>
-                          setNewCompany({
-                            ...newCompany,
-                            indirizzo: e.target.value,
-                          })
-                        }
-                      />
-                      <div className="grid grid-cols-3 gap-3">
-                        <Input
-                          placeholder="Città"
-                          value={newCompany.citta || ""}
-                          onChange={(e) =>
-                            setNewCompany({
-                              ...newCompany,
-                              citta: e.target.value,
-                            })
-                          }
-                        />
-                        <Input
-                          placeholder="Provincia"
-                          value={newCompany.provincia || ""}
-                          onChange={(e) =>
-                            setNewCompany({
-                              ...newCompany,
-                              provincia: e.target.value,
-                            })
-                          }
-                        />
-                        <Input
-                          placeholder="CAP"
-                          value={newCompany.cap || ""}
-                          onChange={(e) =>
-                            setNewCompany({
-                              ...newCompany,
-                              cap: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="flex gap-3 mt-4">
-                        <Button onClick={handleSaveCompany} disabled={saving}>
-                          {saving ? "Salvataggio..." : "Salva"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsEditingCompany(false)}
-                        >
-                          Annulla
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* 🔸 DOCUMENTI */}
-            <TabsContent value="documenti">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Documenti Generati</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {docList.length === 0 ? (
-                    <p className="text-gray-500">
-                      Non hai ancora generato documenti.
-                    </p>
-                  ) : (
-                    <ul className="divide-y">
-                      {docList.map((doc) => (
-                        <li key={doc.id} className="py-2 flex justify-between">
-                          <span>{doc.titolo || "Documento senza titolo"}</span>
-                          <a
-                            href={doc.file_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Apri
-                          </a>
-                        </li>
+              {/* TAB CONTENT */}
+              {activeTab === "personal" && (
+                <>
+                  {/* Personal top actions: select, add, delete */}
+                  <div className="mt-4 mb-4 flex items-center gap-3">
+                    <Label>Seleziona profilo personale</Label>
+                    <select
+                      value={selectedPersonalId || ""}
+                      onChange={(e) => setSelectedPersonalId(e.target.value || null)}
+                      className="border rounded px-2 py-1"
+                    >
+                      <option value="">-- Nuovo / Nessuno --</option>
+                      {personalProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {`${p.nome || "—"} ${p.cognome || ""}`.trim() || p.id}
+                        </option>
                       ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                    </select>
 
-            {/* 🔸 ABBONAMENTO */}
-            <TabsContent value="abbonamento">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Abbonamento</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">
-                    Attualmente il tuo piano è:{" "}
-                    <strong>{profile.subscription_type || "Gratuito"}</strong>
-                  </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                    <Button onClick={createNewPersonalProfile} className="flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> Nuovo
+                    </Button>
+
+                    {selectedPersonalId && (
+                      <Button variant="destructive" onClick={() => deletePersonalProfile(selectedPersonalId)} className="flex items-center gap-2">
+                        <Trash2 className="w-4 h-4" /> Elimina
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Personal form */}
+                  <div className="space-y-8">
+                    {/* Dati principali */}
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati Anagrafici</h2>
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Nome</Label>
+                          <Input value={profile?.nome || ""} onChange={(e) => setField("nome", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Cognome</Label>
+                          <Input value={profile?.cognome || ""} onChange={(e) => setField("cognome", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-6 mb-4">
+                        <div>
+                          <Label>Data di Nascita</Label>
+                          <Input type="date" value={profile?.data_nascita || ""} onChange={(e) => setField("data_nascita", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Luogo di Nascita</Label>
+                          <Input value={profile?.luogo_nascita || ""} onChange={(e) => setField("luogo_nascita", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Provincia di Nascita</Label>
+                          <Input value={profile?.provincia_nascita || ""} onChange={(e) => setField("provincia_nascita", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Residenza */}
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Residenza</h2>
+                      <div className="grid md:grid-cols-4 gap-6 mb-4">
+                        <div className="md:col-span-2">
+                          <Label>Indirizzo</Label>
+                          <Input value={profile?.indirizzo || ""} onChange={(e) => setField("indirizzo", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Numero Civico</Label>
+                          <Input value={profile?.numero_civico || ""} onChange={(e) => setField("numero_civico", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>CAP</Label>
+                          <Input value={profile?.cap || ""} onChange={(e) => setField("cap", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-6">
+                        <div>
+                          <Label>Città</Label>
+                          <Input value={profile?.citta || ""} onChange={(e) => setField("citta", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Provincia</Label>
+                          <Input value={profile?.provincia || ""} onChange={(e) => setField("provincia", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Regione</Label>
+                          <Input value={profile?.regione || ""} onChange={(e) => setField("regione", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Contact & Document sections shortened (keep same fields as before) */}
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Contatti</h2>
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Email</Label>
+                          <Input value={user.email} disabled />
+                        </div>
+                        <div>
+                          <Label>Telefono</Label>
+                          <Input value={profile?.telefono || ""} onChange={(e) => setField("telefono", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Documento d'Identità</h2>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                          <Label>Tipo Documento</Label>
+                          <Input value={profile?.documento_tipo || ""} onChange={(e) => setField("documento_tipo", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Numero Documento</Label>
+                          <Input value={profile?.documento_numero || ""} onChange={(e) => setField("documento_numero", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    <div className="pt-6 flex justify-end">
+                      <Button onClick={savePersonalProfile} disabled={savingProfile} className="bg-indigo-600 hover:bg-indigo-700 px-8">
+                        {savingProfile ? "Salvataggio..." : "Salva Profilo Personale"}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* --- company tab (multi) --- */}
+              {activeTab === "company" && (
+                <>
+                  <div className="mt-4 mb-4 flex items-center gap-3">
+                    <Label>Seleziona profilo aziendale</Label>
+                    <select value={selectedCompanyId || ""} onChange={(e) => setSelectedCompanyId(e.target.value || null)} className="border rounded px-2 py-1">
+                      <option value="">-- Nuovo / Nessuno --</option>
+                      {companyProfiles.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.ragione_sociale || c.id}
+                        </option>
+                      ))}
+                    </select>
+
+                    <Button onClick={createNewCompanyProfile} className="flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> Nuova
+                    </Button>
+
+                    {selectedCompanyId && (
+                      <Button variant="destructive" onClick={() => deleteCompanyProfile(selectedCompanyId)} className="flex items-center gap-2">
+                        <Trash2 className="w-4 h-4" /> Elimina
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="space-y-8 mt-4">
+                    {/* Company form */}
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati Aziendali</h2>
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Ragione Sociale</Label>
+                          <Input value={companyProfile?.ragione_sociale || ""} onChange={(e) => setCompanyField("ragione_sociale", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Forma Giuridica</Label>
+                          <Input value={companyProfile?.forma_giuridica || ""} onChange={(e) => setCompanyField("forma_giuridica", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Partita IVA</Label>
+                          <Input value={companyProfile?.partita_iva || ""} onChange={(e) => setCompanyField("partita_iva", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Codice Fiscale</Label>
+                          <Input value={companyProfile?.codice_fiscale || ""} onChange={(e) => setCompanyField("codice_fiscale", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Email aziendale</Label>
+                          <Input value={companyProfile?.email || ""} onChange={(e) => setCompanyField("email", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Telefono</Label>
+                          <Input value={companyProfile?.telefono || ""} onChange={(e) => setCompanyField("telefono", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* sede legale, rappresentante, banca, fatturato (same fields as before) */}
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Sede Legale</h2>
+                      <div className="grid md:grid-cols-4 gap-6 mb-4">
+                        <div className="md:col-span-2">
+                          <Label>Indirizzo</Label>
+                          <Input value={companyProfile?.indirizzo || ""} onChange={(e) => setCompanyField("indirizzo", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>CAP</Label>
+                          <Input value={companyProfile?.cap || ""} onChange={(e) => setCompanyField("cap", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Città</Label>
+                          <Input value={companyProfile?.citta || ""} onChange={(e) => setCompanyField("citta", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-6">
+                        <div>
+                          <Label>Provincia</Label>
+                          <Input value={companyProfile?.provincia || ""} onChange={(e) => setCompanyField("provincia", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Paese</Label>
+                          <Input value={companyProfile?.paese || ""} onChange={(e) => setCompanyField("paese", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Rappresentante Legale</h2>
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Nome</Label>
+                          <Input value={companyProfile?.rappresentante_nome || ""} onChange={(e) => setCompanyField("rappresentante_nome", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Cognome</Label>
+                          <Input value={companyProfile?.rappresentante_cognome || ""} onChange={(e) => setCompanyField("rappresentante_cognome", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                          <Label>Codice Fiscale</Label>
+                          <Input value={companyProfile?.rappresentante_cf || ""} onChange={(e) => setCompanyField("rappresentante_cf", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati Bancari Aziendali</h2>
+                      <div className="grid md:grid-cols-2 gap-6 mb-4">
+                        <div>
+                          <Label>Banca</Label>
+                          <Input value={companyProfile?.banca_aziendale || ""} onChange={(e) => setCompanyField("banca_aziendale", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>IBAN</Label>
+                          <Input value={companyProfile?.iban_aziendale || ""} onChange={(e) => setCompanyField("iban_aziendale", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati Economici</h2>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                          <Label>Fatturato Anno Corrente</Label>
+                          <Input value={companyProfile?.fatturato_anno_corrente || ""} onChange={(e) => setCompanyField("fatturato_anno_corrente", e.target.value)} />
+                        </div>
+                      </div>
+                    </section>
+
+                    <div className="pt-6 flex justify-end">
+                      <Button onClick={saveCompanyProfile} disabled={savingCompany} className="bg-indigo-600 hover:bg-indigo-700 px-8">
+                        {savingCompany ? "Salvataggio..." : "Salva Profilo Aziendale"}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* documents / billing placeholders */}
+              {activeTab === "documents" && (
+                <div className="py-10 text-center text-gray-500 text-sm">Qui vedrai l’elenco dei documenti salvati collegati al tuo profilo.</div>
+              )}
+              {activeTab === "billing" && (
+                <div className="py-10 text-center text-gray-500 text-sm">Questa sezione sarà disponibile a breve (gestione abbonamento).</div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
   );
 }
+
