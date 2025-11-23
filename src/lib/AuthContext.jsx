@@ -5,35 +5,43 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // ⚠️ QUICK FIX: parte da false per non bloccare
 
   // Recupera l'utente attuale all'avvio
   useEffect(() => {
+    console.log("📍 AuthProvider useEffect started");
+    
     const getUser = async () => {
+      console.log("📍 getUser started");
       try {
+        console.log("📍 Calling supabase.auth.getUser()...");
         const { data, error } = await supabase.auth.getUser();
+        console.log("✅ Got response:", { data, error });
+        
         if (error) {
-          console.warn('Errore nel recupero utente:', error.message);
+          console.warn('⚠️ Errore nel recupero utente:', error.message);
           setUser(null);
         } else {
+          console.log("✅ User set:", data?.user?.email || "null");
           setUser(data?.user ?? null);
         }
       } catch (err) {
-        console.error('Errore imprevisto nel recupero utente:', err);
+        console.error('❌ Errore imprevisto nel recupero utente:', err);
         setUser(null);
-      } finally {
-        setLoading(false);
       }
+      console.log("📍 getUser completed");
     };
 
     getUser();
 
     // Listener per login/logout in tempo reale
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("📍 Auth state changed:", _event, session?.user?.email || "no user");
       setUser(session?.user ?? null);
     });
 
     return () => {
+      console.log("📍 AuthProvider cleanup");
       if (listener?.subscription) {
         listener.subscription.unsubscribe();
       }
@@ -49,18 +57,12 @@ export const AuthProvider = ({ children }) => {
     signOut: () => supabase.auth.signOut(),
   };
 
+  console.log("📍 AuthProvider render - loading:", loading, "user:", user?.email || "null");
+
+  // ⚠️ QUICK FIX: Non blocca più su loading, renderizza subito
   return (
     <AuthContext.Provider value={value}>
-      {loading ? (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Caricamento...</p>
-          </div>
-        </div>
-      ) : (
-        children
-      )}
+      {children}
     </AuthContext.Provider>
   );
 };

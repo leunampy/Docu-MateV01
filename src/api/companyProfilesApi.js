@@ -1,5 +1,6 @@
 import { supabase } from "@/api/supabaseClient";
 
+// Funzioni individuali (per backward compatibility)
 export async function listCompanyProfiles(userId) {
   const { data, error } = await supabase
     .from("company_profiles")
@@ -35,6 +36,37 @@ export async function deleteCompanyProfile(id) {
   if (error) throw error;
   return true;
 }
+
+// Oggetto API per CompanyProfileModal
+const companyProfilesApi = {
+  async list(userId) {
+    return listCompanyProfiles(userId);
+  },
+  
+  async get(id) {
+    return getCompanyProfile(id);
+  },
+  
+  async create(data) {
+    // Aggiungi user_id se mancante
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    
+    const payload = { ...data, user_id: user.id };
+    return upsertCompanyProfile(payload);
+  },
+  
+  async update(id, data) {
+    const payload = { ...data, id };
+    return upsertCompanyProfile(payload);
+  },
+  
+  async delete(id) {
+    return deleteCompanyProfile(id);
+  }
+};
+
+export { companyProfilesApi };
 
 /* Example: helpers for related tables */
 export async function listCompanyLocations(companyProfileId) {

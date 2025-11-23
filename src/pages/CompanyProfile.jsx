@@ -5,7 +5,7 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Factory } from "lucide-react";
 import CompanyProfileModal from "@/components/compile/CompanyProfileModal";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function CompanyProfilePage() {
   const { user } = useAuth();
