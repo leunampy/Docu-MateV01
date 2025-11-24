@@ -2,13 +2,44 @@ import { supabase } from "@/api/supabaseClient";
 
 // Funzioni individuali (per backward compatibility)
 export async function listCompanyProfiles(userId) {
-  const { data, error } = await supabase
-    .from("company_profiles")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data;
+  console.log("📋 listCompanyProfiles chiamata con userId:", userId);
+  
+  if (!userId) {
+    console.warn("⚠️ listCompanyProfiles: userId mancante");
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("company_profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    
+    console.log("📋 listCompanyProfiles risultato Supabase:", {
+      hasData: !!data,
+      recordCount: data?.length || 0,
+      hasError: !!error,
+      errorMessage: error?.message,
+      errorCode: error?.code,
+      errorDetails: error?.details,
+    });
+
+    if (error) {
+      console.error("❌ Errore listCompanyProfiles:", error);
+      throw error;
+    }
+
+    console.log("📋 listCompanyProfiles restituisce", data?.length || 0, "profili");
+    return data || [];
+  } catch (err) {
+    console.error("❌ Errore in listCompanyProfiles:", {
+      message: err.message,
+      code: err.code,
+      details: err.details,
+    });
+    throw err;
+  }
 }
 
 export async function getCompanyProfile(id) {

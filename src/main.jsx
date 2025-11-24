@@ -3,8 +3,10 @@ import ReactDOM from 'react-dom/client';
 import App from '@/App.jsx';
 import '@/index.css';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from "@/lib/AuthContext.jsx";
 import ErrorBoundary from '@/components/ErrorBoundary.jsx';
+import { queryClientInstance } from '@/lib/query-client';
 
 // 🧩 Montiamo l'app
 const rootElement = document.getElementById('root');
@@ -17,9 +19,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <ErrorBoundary>
     <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <QueryClientProvider client={queryClientInstance}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   </ErrorBoundary>
 );

@@ -12,6 +12,7 @@ import CompanySelector from "@/components/questionnaire/CompanySelector";
 
 import { DOCUMENT_SCHEMAS } from "@/data/documentSchemas";
 import { callAI } from "@/lib/ai";
+import { buildDocumentPrompt } from "@/lib/promptBuilder";
 
 export default function QuestionnaireForm({
   documentType,
@@ -201,26 +202,17 @@ export default function QuestionnaireForm({
     }
   };
 
+  const prev = () => {
+    if (step > 0) {
+      setStep((s) => s - 1);
+    }
+  };
+
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      // Build prompt for document generation
-      const prompt = `Sei un assistente legale specializzato nella redazione di documenti legali italiani.
-
-Devi generare un documento di tipo: ${documentType.name}
-
-Dati forniti:
-${JSON.stringify(answers, null, 2)}
-
-ISTRUZIONI:
-1. Genera un documento legale completo e professionale in italiano
-2. Utilizza tutti i dati forniti per compilare il documento
-3. Segui le norme e le convenzioni legali italiane
-4. Il documento deve essere formattato correttamente e pronto per l'uso
-5. Includi tutte le clausole standard necessarie per questo tipo di documento
-6. Assicurati che il documento sia completo e legalmente valido
-
-Genera il documento:`;
+      // Build prompt for document generation using prompt builder
+      const prompt = buildDocumentPrompt(documentType, answers, schema);
 
       const generatedText = await callAI(prompt);
 
@@ -251,6 +243,22 @@ Genera il documento:`;
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl">{documentType.name}</CardTitle>
+          
+          {/* 📊 Progress Bar */}
+          <div className="mt-4 space-y-2">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Domanda {step + 1} di {visibleFields.length}</span>
+              <span>{Math.round(((step + 1) / visibleFields.length) * 100)}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+              <motion.div
+                className="bg-gradient-to-r from-indigo-600 to-blue-600 h-2.5 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${((step + 1) / visibleFields.length) * 100}%` }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              />
+            </div>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -258,10 +266,20 @@ Genera il documento:`;
 
           {currentField && renderField(currentField)}
 
-          <div className="flex justify-between mt-6">
-            <Button variant="outline" onClick={onBack}>Indietro</Button>
+          <div className="flex justify-between mt-6 gap-3">
+            <Button 
+              variant="outline" 
+              onClick={step === 0 ? onBack : prev}
+              disabled={loading}
+            >
+              {step === 0 ? "Indietro" : "Precedente"}
+            </Button>
 
-            <Button className="bg-blue-600 text-white" onClick={next}>
+            <Button 
+              className="bg-blue-600 text-white" 
+              onClick={next}
+              disabled={loading}
+            >
               {loading ? (
                 <>
                   <Loader2 className="animate-spin mr-2" />
@@ -274,6 +292,27 @@ Genera il documento:`;
               )}
             </Button>
           </div>
+
+          {/* 📄 Preview Risposte Date */}
+          {Object.keys(answers).length > 0 && (
+            <details className="mt-6 p-4 bg-gray-50 rounded-lg border">
+              <summary className="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
+                📋 Mostra risposte date ({Object.keys(answers).length})
+              </summary>
+              <div className="mt-3 space-y-2 text-sm">
+                {Object.entries(answers).map(([key, value]) => {
+                  const field = fields.find(f => f.id === key);
+                  const label = field?.label || key;
+                  return (
+                    <div key={key} className="flex justify-between border-b pb-1">
+                      <span className="text-gray-600 font-medium">{label}:</span>
+                      <span className="text-gray-900">{value || "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
         </CardContent>
       </Card>
     </motion.div>

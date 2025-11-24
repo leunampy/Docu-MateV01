@@ -61,7 +61,17 @@ export default function Layout() {
   
     // 🔄 Ascolta i cambiamenti di stato (login / logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("🔄 Auth state changed:", event, session?.user?.email || "no user");
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        console.log("🚪 User logged out - pulizia stato");
+        setUser(null);
+        setUserProfile(null);
+        return;
+      }
+      
       if (session?.user) {
+        console.log("✅ User logged in:", session.user.email);
         setUser(session.user);
         // Carica profilo utente
         try {
@@ -74,17 +84,51 @@ export default function Layout() {
         } catch (err) {
           setUserProfile(null);
         }
-      } else {
-        setUser(null);
-        setUserProfile(null);
       }
     });
   
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    console.log("🚪 Inizio logout...");
+
+    try {
+      console.log("🚪 Chiamata supabase.auth.signOut() con scope global...");
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+
+      if (error) {
+        console.error("❌ Errore logout:", error);
+        throw error;
+      }
+
+      console.log("✅ Logout completato con successo");
+
+      // Pulizia stato locale
+      console.log("🧹 Pulizia stato locale...");
+      setUser(null);
+      setUserProfile(null);
+
+      // Attendi un momento per assicurarsi che il logout sia propagato
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Redirect al login con reload completo per resettare tutto lo stato
+      console.log("🔄 Redirect a /auth con reload completo...");
+      window.location.href = '/auth';
+
+    } catch (err) {
+      console.error("❌ Errore durante logout:", {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+      });
+      alert("Errore durante il logout. Riprova.");
+    }
   };
 
   const getInitials = (name) => {
@@ -193,7 +237,7 @@ export default function Layout() {
                       <DropdownMenuSeparator />
                       {/* @ts-ignore */}
                       <DropdownMenuItem
-                        onClick={handleLogout}
+                        onClick={(e) => handleLogout(e)}
                         className="cursor-pointer text-red-600"
                       >
                         <LogOut className="w-4 h-4 mr-2" />

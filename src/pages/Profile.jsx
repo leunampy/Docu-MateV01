@@ -11,6 +11,38 @@ import { Badge } from "@/components/ui/badge";
 
 import { User, Building2, FileText, CreditCard, Plus, Trash2 } from "lucide-react";
 
+const COMPANY_NUMERIC_FIELDS = [
+  "fatturato_anno_corrente",
+  "fatturato_anno_precedente",
+  "fatturato_due_anni_fa",
+  "fatturato_tre_anni_fa",
+  "patrimonio_netto",
+  "capitale_circolante",
+  "numero_dipendenti",
+  "numero_collaboratori",
+  "organico_medio_triennio",
+];
+
+const PERSONAL_NUMERIC_FIELDS = [];
+
+function normalizeNumericFields(payload, numericFields) {
+  return numericFields.reduce((acc, field) => {
+    const value = acc[field];
+    acc[field] =
+      value === undefined || value === null || `${value}`.trim() === "" ? null : value;
+    return acc;
+  }, { ...payload });
+}
+
+function supabaseWithTimeout(operationPromise, timeout = 10000) {
+  return Promise.race([
+    operationPromise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("⏱️ Timeout: operazione troppo lenta")), timeout)
+    ),
+  ]);
+}
+
 export default function ProfilePage() {
   const authContext = useAuth();
   
@@ -96,33 +128,100 @@ export default function ProfilePage() {
   }
 
   async function loadCompanyProfiles() {
-    if (!user?.id) return;
-    setLoadingCompanyList(true);
-    const { data, error } = await supabase
-      .from("company_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    console.log("🔍 ========== LOAD COMPANY PROFILES ==========");
+    console.log("🔍 User disponibile:", !!user);
+    console.log("🔍 User ID:", user?.id);
 
-    if (error) {
-      console.error("Errore caricamento profili aziendali:", error);
-      setCompanyProfiles([]);
-    } else {
-      setCompanyProfiles(data || []);
-      if (!selectedCompanyId) {
-        const primary = data && data.length ? data[0] : null;
-        if (primary) {
-          setSelectedCompanyId(primary.id);
-          setCompanyProfile(primary);
-        } else {
-          setCompanyProfile({});
-        }
-      } else {
-        const sel = (data || []).find((c) => c.id === selectedCompanyId);
-        if (sel) setCompanyProfile(sel);
-      }
+    if (!user?.id) {
+      console.warn("⚠️ User ID mancante, skip loadCompanyProfiles");
+      return;
     }
-    setLoadingCompanyList(false);
+
+    setLoadingCompanyList(true);
+
+    try {
+      console.log("🔍 Inizio query SELECT company_profiles...");
+      const startTime = Date.now();
+
+      const { data, error } = await supabase
+        .from("company_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      const queryTime = Date.now() - startTime;
+      console.log(`🔍 Query completata in ${queryTime}ms`);
+      console.log("🔍 Risposta Supabase:", {
+        hasData: !!data,
+        recordCount: data?.length || 0,
+        hasError: !!error,
+        errorMessage: error?.message,
+        errorCode: error?.code,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
+        records: data,
+      });
+
+      // Log dei campi presenti nei record per verificare i nomi dei campi
+      if (data && data.length > 0) {
+        console.log("🔍 Campi presenti nel primo record:", Object.keys(data[0]));
+        console.log("🔍 Valori campi nome:", {
+          ragione_sociale: data[0].ragione_sociale,
+          company_name: data[0].company_name,
+          profile_name: data[0].profile_name,
+          id: data[0].id,
+        });
+      }
+
+      if (error) {
+        console.error("❌ Errore query SELECT:", error);
+        console.error("❌ Dettagli errore completo:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          stack: error.stack,
+        });
+        setCompanyProfiles([]);
+      } else {
+        console.log("🔍 Profili caricati:", data);
+        setCompanyProfiles(data || []);
+        console.log("🔍 setCompanyProfiles chiamato con", data?.length || 0, "profili");
+
+        if (!selectedCompanyId) {
+          const primary = data && data.length ? data[0] : null;
+          if (primary) {
+            console.log("🔍 Nessun profilo selezionato, seleziono il primo:", primary.id);
+            setSelectedCompanyId(primary.id);
+            setCompanyProfile(primary);
+          } else {
+            console.log("🔍 Nessun profilo disponibile");
+            setCompanyProfile({});
+          }
+        } else {
+          console.log("🔍 Profilo già selezionato:", selectedCompanyId);
+          const sel = (data || []).find((c) => c.id === selectedCompanyId);
+          if (sel) {
+            console.log("🔍 Profilo selezionato trovato nei dati caricati");
+            setCompanyProfile(sel);
+          } else {
+            console.warn("⚠️ Profilo selezionato non trovato nei dati caricati");
+          }
+        }
+      }
+
+      console.log("🔍 ========== LOAD COMPLETATO ==========");
+    } catch (err) {
+      console.error("❌ Errore loadCompanyProfiles:", {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        stack: err.stack,
+      });
+      setCompanyProfiles([]);
+    } finally {
+      setLoadingCompanyList(false);
+    }
   }
 
   // ---------- STATS ----------
@@ -143,10 +242,14 @@ export default function ProfilePage() {
 
   // initial load
   useEffect(() => {
+    console.log("🔄 useEffect triggered - user changed:", user?.id);
     if (user?.id) {
+      console.log("🔄 User ID disponibile, carico profili...");
       loadPersonalProfiles();
       loadCompanyProfiles();
       loadDocumentStats();
+    } else {
+      console.log("🔄 User ID non disponibile, skip caricamento");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -248,30 +351,39 @@ export default function ProfilePage() {
   async function savePersonalProfile() {
     if (!user?.id || !profile) return;
     setSavingProfile(true);
-    const payload = { ...profile, user_id: user.id };
+    const normalizedPayload = normalizeNumericFields(
+      { ...profile, user_id: user.id },
+      PERSONAL_NUMERIC_FIELDS
+    );
 
     try {
+      let result;
       if (profile.id) {
-        const { error } = await supabase
-          .from("user_profiles")
-          .update(payload)
-          .eq("id", profile.id);
+        const { data, error } = await supabaseWithTimeout(
+          supabase
+            .from("user_profiles")
+            .update(normalizedPayload)
+            .eq("id", profile.id)
+            .select()
+            .single()
+        );
         if (error) throw error;
+        result = data;
       } else {
-        const { data, error } = await supabase
-          .from("user_profiles")
-          .insert(payload)
-          .select()
-          .single();
+        const { data, error } = await supabaseWithTimeout(
+          supabase.from("user_profiles").insert(normalizedPayload).select().single()
+        );
         if (error) throw error;
-        setProfile(data);
-        setSelectedPersonalId(data.id);
+        result = data;
       }
+
+      setProfile(result);
+      setSelectedPersonalId(result.id);
       await loadPersonalProfiles();
-      alert("Profilo personale salvato");
+      alert("✅ Profilo personale salvato!");
     } catch (err) {
-      console.error(err);
-      alert("Errore salvataggio profilo personale");
+      console.error("❌ Errore salvataggio profilo personale:", err);
+      alert(`❌ Errore: ${err.message}`);
     } finally {
       setSavingProfile(false);
     }
@@ -280,30 +392,46 @@ export default function ProfilePage() {
   async function saveCompanyProfile() {
     if (!user?.id || !companyProfile) return;
     setSavingCompany(true);
-    const payload = { ...companyProfile, user_id: user.id };
+
+    const normalizedPayload = normalizeNumericFields(
+      { ...companyProfile, user_id: user.id },
+      COMPANY_NUMERIC_FIELDS
+    );
 
     try {
+      let result;
       if (companyProfile.id) {
-        const { error } = await supabase
-          .from("company_profiles")
-          .update(payload)
-          .eq("id", companyProfile.id);
+        const { data, error } = await supabaseWithTimeout(
+          supabase
+            .from("company_profiles")
+            .update(normalizedPayload)
+            .eq("id", companyProfile.id)
+            .select()
+            .single()
+        );
         if (error) throw error;
+        result = data;
       } else {
-        const { data, error } = await supabase
-          .from("company_profiles")
-          .insert(payload)
-          .select()
-          .single();
+        const { data, error } = await supabaseWithTimeout(
+          supabase.from("company_profiles").insert(normalizedPayload).select().single()
+        );
         if (error) throw error;
-        setCompanyProfile(data);
-        setSelectedCompanyId(data.id);
+        result = data;
       }
+
+      setCompanyProfile(result);
+      setSelectedCompanyId(result.id);
       await loadCompanyProfiles();
-      alert("Profilo aziendale salvato");
+      alert("✅ Profilo aziendale salvato con successo!");
     } catch (err) {
-      console.error(err);
-      alert("Errore salvataggio profilo aziendale");
+      console.error("❌ Errore salvataggio profilo aziendale:", err);
+      if (err.message?.includes("row-level security")) {
+        alert("⚠️ Errore permessi database. Contatta il supporto.");
+      } else if (err.message?.includes("invalid input syntax")) {
+        alert("⚠️ Alcuni campi contengono dati non validi. Controlla i campi numerici.");
+      } else {
+        alert(`❌ Errore: ${err.message}`);
+      }
     } finally {
       setSavingCompany(false);
     }
@@ -517,16 +645,41 @@ export default function ProfilePage() {
               {/* --- company tab (multi) --- */}
               {activeTab === "company" && (
                 <>
+                  {(() => {
+                    console.log("🔍 Rendering dropdown profili aziendali:", {
+                      companyProfilesCount: companyProfiles.length,
+                      loadingCompanyList,
+                      selectedCompanyId,
+                      profiles: companyProfiles,
+                    });
+                    return null;
+                  })()}
                   <div className="mt-4 mb-4 flex items-center gap-3">
                     <Label>Seleziona profilo aziendale</Label>
                     <select value={selectedCompanyId || ""} onChange={(e) => setSelectedCompanyId(e.target.value || null)} className="border rounded px-2 py-1">
                       <option value="">-- Nuovo / Nessuno --</option>
-                      {companyProfiles.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.ragione_sociale || c.id}
-                        </option>
-                      ))}
+                      {companyProfiles.map((c) => {
+                        // Fallback per il nome del profilo
+                        const profileName = c.ragione_sociale || c.company_name || c.profile_name || c.id;
+                        console.log("🔍 Rendering option profilo:", {
+                          id: c.id,
+                          ragione_sociale: c.ragione_sociale,
+                          company_name: c.company_name,
+                          profile_name: c.profile_name,
+                          selectedName: profileName,
+                        });
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {profileName}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {!loadingCompanyList && companyProfiles.length === 0 && (
+                      <span className="text-sm text-yellow-600 ml-2">
+                        ⚠️ Nessun profilo caricato (verifica console per dettagli)
+                      </span>
+                    )}
 
                     <Button onClick={createNewCompanyProfile} className="flex items-center gap-2">
                       <Plus className="w-4 h-4" /> Nuova

@@ -35,8 +35,15 @@ export const AuthProvider = ({ children }) => {
     getUser();
 
     // Listener per login/logout in tempo reale
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("📍 Auth state changed:", _event, session?.user?.email || "no user");
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("📍 Auth state changed:", event, session?.user?.email || "no user");
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        console.log("📍 SIGNED_OUT event - pulizia stato user");
+        setUser(null);
+        return;
+      }
+      
       setUser(session?.user ?? null);
     });
 
@@ -49,12 +56,30 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Azioni disponibili nel contesto
+  const signOut = async () => {
+    console.log("📍 AuthContext signOut chiamato");
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) {
+        console.error("❌ Errore signOut in AuthContext:", error);
+        throw error;
+      }
+      // Cleanup immediato dello stato
+      console.log("📍 AuthContext signOut - pulizia stato user");
+      setUser(null);
+      return { error: null };
+    } catch (err) {
+      console.error("❌ Errore durante signOut in AuthContext:", err);
+      return { error: err };
+    }
+  };
+
   const value = {
     user,
     loading,
     signUp: (email, password) => supabase.auth.signUp({ email, password }),
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
-    signOut: () => supabase.auth.signOut(),
+    signOut,
   };
 
   console.log("📍 AuthProvider render - loading:", loading, "user:", user?.email || "null");
