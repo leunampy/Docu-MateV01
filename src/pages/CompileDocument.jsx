@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { callAI } from "@/lib/ai";
 import { useQuery } from "@tanstack/react-query";
@@ -28,22 +28,78 @@ export default function CompileDocument() {
   const [compiledResult, setCompiledResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const { data: user } = useQuery({
+  const { data: user, isLoading: userLoading, error: userError } = useQuery({
     queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
+    queryFn: async () => {
+      console.log("🔄 [USER QUERY] Chiamata base44.auth.me()...");
+      const result = await base44.auth.me();
+      console.log("🔄 [USER QUERY] Risultato:", result);
+      console.log("🔄 [USER QUERY] User ID:", result?.id);
+      return result;
+    },
   });
 
-  const { data: companyProfiles = [], refetch: refetchCompanies } = useQuery({
+  const { data: companyProfiles = [], refetch: refetchCompanies, isLoading: companyLoading, error: companyError } = useQuery({
     queryKey: ['companyProfiles'],
-    queryFn: () => base44.entities.CompanyProfile.list("-created_date"),
+    queryFn: async () => {
+      console.log("📋 ========== LOAD COMPANY PROFILES ==========");
+      console.log("📋 User disponibile:", user);
+      console.log("📋 User ID:", user?.id);
+      console.log("📋 Chiamata base44.entities.CompanyProfile.list...");
+      const startTime = Date.now();
+      try {
+        const result = await base44.entities.CompanyProfile.list("-created_date");
+        const elapsed = Date.now() - startTime;
+        console.log(`📋 Query completata in ${elapsed}ms`);
+        console.log("📋 Risultato:", result);
+        console.log("📋 Numero profili:", result?.length || 0);
+        console.log("📋 ========== LOAD COMPLETATO ==========");
+        return result;
+      } catch (err) {
+        console.error("❌ Errore caricamento profili aziendali:", err);
+        throw err;
+      }
+    },
     initialData: [],
+    enabled: !!user?.id,
   });
 
-  const { data: personalProfiles = [], refetch: refetchPersonal } = useQuery({
+  const { data: personalProfiles = [], refetch: refetchPersonal, isLoading: personalLoading } = useQuery({
     queryKey: ['personalProfiles'],
-    queryFn: () => base44.entities.PersonalDocumentProfile.list("-created_date"),
+    queryFn: async () => {
+      console.log("👤 [PERSONAL PROFILES] Caricamento profili personali...");
+      try {
+        const result = await base44.entities.PersonalDocumentProfile.list("-created_date");
+        console.log("👤 [PERSONAL PROFILES] Risultato:", result);
+        console.log("👤 [PERSONAL PROFILES] Numero profili:", result?.length || 0);
+        return result;
+      } catch (err) {
+        console.error("❌ Errore caricamento profili personali:", err);
+        throw err;
+      }
+    },
     initialData: [],
+    enabled: !!user?.id,
   });
+
+  // Logging dettagliato per debug
+  useEffect(() => {
+    console.log("🔍 ========== COMPONENTE RENDER ==========");
+    console.log("🔍 User:", user);
+    console.log("🔍 User ID:", user?.id);
+    console.log("🔍 User Loading:", userLoading);
+    console.log("🔍 User Error:", userError);
+    console.log("🔍 Company Profiles:", companyProfiles);
+    console.log("🔍 Company Profiles Length:", companyProfiles?.length);
+    console.log("🔍 Company Loading:", companyLoading);
+    console.log("🔍 Company Error:", companyError);
+    console.log("🔍 Personal Profiles:", personalProfiles);
+    console.log("🔍 Personal Profiles Length:", personalProfiles?.length);
+    console.log("🔍 Personal Loading:", personalLoading);
+    console.log("🔍 Selected Company ID:", selectedCompanyId);
+    console.log("🔍 Profile Type:", profileType);
+    console.log("🔍 ========================================");
+  }, [user, userLoading, userError, companyProfiles, companyLoading, companyError, personalProfiles, personalLoading, selectedCompanyId, profileType]);
 
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -389,17 +445,35 @@ Procedi con la compilazione:`;
                           >
                             <div className="ml-8 space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                               <Label className="text-sm">Seleziona Profilo Aziendale</Label>
+
+                              {/* Debug Info */}
+                              {companyProfiles.length === 0 && (
+                                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
+                                  ⚠️ <strong>DEBUG:</strong> Nessun profilo aziendale trovato.
+                                  {companyLoading && " (Caricamento in corso...)"}
+                                  {companyError && ` Errore: ${companyError.message}`}
+                                  {!user && " (User non disponibile)"}
+                                  <br />
+                                  <span className="text-xs text-gray-600">
+                                    Controlla la console per dettagli.
+                                  </span>
+                                </div>
+                              )}
+
                               <div className="flex gap-2">
                                 <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
                                   <SelectTrigger className="flex-1">
                                     <SelectValue placeholder="Scegli un'azienda..." />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {companyProfiles.map((company) => (
-                                      <SelectItem key={company.id} value={company.id}>
-                                        {company.profile_name} - {company.company_name}
-                                      </SelectItem>
-                                    ))}
+                                    {companyProfiles.map((company) => {
+                                      console.log("🏢 [RENDER] Company item:", company);
+                                      return (
+                                        <SelectItem key={company.id} value={company.id}>
+                                          {company.profile_name} - {company.company_name}
+                                        </SelectItem>
+                                      );
+                                    })}
                                   </SelectContent>
                                 </Select>
                                 <Button
