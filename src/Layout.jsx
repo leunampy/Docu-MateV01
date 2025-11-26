@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 
 // Pagine
 import Home from "@/pages/Home";
@@ -24,71 +25,48 @@ import Settings from "@/pages/Settings";
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [user, setUser] = React.useState(null);
+  
+  // ✅ USA AuthContext invece di stato locale
+  const { user } = useAuth();
+  
+  // ✅ Mantieni solo userProfile locale
   const [userProfile, setUserProfile] = React.useState(null);
 
+  // ✅ Carica userProfile quando user cambia
   React.useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-      if (error) {
-        console.error("Errore caricamento utente:", error.message);
-        setUser(null);
-        setUserProfile(null);
-        return;
-      }
-      setUser(user);
-      
-      // Carica profilo utente se esiste
-      if (user) {
-        try {
-          const { data: profile } = await supabase
-            .from("user_profiles")
-            .select("*")
-            .eq("user_id", user.id)
-            .single();
-          setUserProfile(profile);
-        } catch (err) {
-          // Se la tabella non esiste o non ci sono dati, continua senza errore
-          console.log("Profilo utente non trovato");
+    console.log("🔄 Layout: User changed:", user?.email || "null");
+    
+    if (!user?.id) {
+      console.log("🧹 Layout: Nessun user, pulisco userProfile");
+      setUserProfile(null);
+      return;
+    }
+    
+    const loadUserProfile = async () => {
+      try {
+        console.log("👤 Layout: Caricamento userProfile per user:", user.id);
+        const { data: profile, error } = await supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (error) {
+          console.warn("⚠️ Layout: Profilo utente non trovato:", error.message);
+          setUserProfile(null);
+          return;
         }
+        
+        console.log("✅ Layout: UserProfile caricato:", profile);
+        setUserProfile(profile);
+      } catch (err) {
+        console.error("❌ Layout: Errore caricamento userProfile:", err);
+        setUserProfile(null);
       }
     };
-  
-    getUser();
-  
-    // 🔄 Ascolta i cambiamenti di stato (login / logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔄 Auth state changed:", event, session?.user?.email || "no user");
-      
-      if (event === 'SIGNED_OUT' || !session) {
-        console.log("🚪 User logged out - pulizia stato");
-        setUser(null);
-        setUserProfile(null);
-        return;
-      }
-      
-      if (session?.user) {
-        console.log("✅ User logged in:", session.user.email);
-        setUser(session.user);
-        // Carica profilo utente
-        try {
-          const { data: profile } = await supabase
-            .from("user_profiles")
-            .select("*")
-            .eq("user_id", session.user.id)
-            .single();
-          setUserProfile(profile);
-        } catch (err) {
-          setUserProfile(null);
-        }
-      }
-    });
-  
-    return () => subscription.unsubscribe();
-  }, []);
+    
+    loadUserProfile();
+  }, [user]);
 
   const handleLogout = async (e) => {
     if (e) {
@@ -96,38 +74,79 @@ export default function Layout() {
       e.stopPropagation();
     }
 
-    console.log("🚪 Inizio logout...");
+    console.log("🚪 ========== LAYOUT LOGOUT ==========");
+    console.log("🚪 User prima del logout:", user?.email);
 
     try {
-      console.log("🚪 Chiamata supabase.auth.signOut() con scope global...");
+      // Pulizia stato locale
+      console.log("🧹 Layout: Pulizia userProfile locale...");
+      setUserProfile(null);
+      console.log("✅ Layout: userProfile pulito");
+
+      // Logout da Supabase
+      console.log("🚪 Layout: Chiamata supabase.auth.signOut({ scope: 'global' })...");
       const { error } = await supabase.auth.signOut({ scope: 'global' });
 
       if (error) {
-        console.error("❌ Errore logout:", error);
+        console.error("❌ Layout: Errore durante signOut:", error);
         throw error;
       }
 
-      console.log("✅ Logout completato con successo");
+      console.log("✅ Layout: signOut() completato");
 
-      // Pulizia stato locale
-      console.log("🧹 Pulizia stato locale...");
-      setUser(null);
-      setUserProfile(null);
+      // Pulizia manuale localStorage
+      console.log("🧹 Layout: Pulizia manuale localStorage...");
+      try {
+        const supabaseKeys = Object.keys(localStorage).filter(key => 
+          key.startsWith('sb-') || 
+          key.includes('supabase') ||
+          key.includes('auth-token')
+        );
+        
+        console.log("🗑️ Layout: Chiavi Supabase trovate:", supabaseKeys);
+        supabaseKeys.forEach(key => {
+          console.log("🗑️ Layout: Rimuovo chiave:", key);
+          localStorage.removeItem(key);
+        });
+        
+        const sessionKeys = Object.keys(sessionStorage).filter(key => 
+          key.startsWith('sb-') || 
+          key.includes('supabase') ||
+          key.includes('auth-token')
+        );
+        
+        sessionKeys.forEach(key => {
+          console.log("🗑️ Layout: Rimuovo da sessionStorage:", key);
+          sessionStorage.removeItem(key);
+        });
+        
+        console.log("✅ Layout: Storage pulito");
+      } catch (storageErr) {
+        console.warn("⚠️ Layout: Errore pulizia storage:", storageErr);
+      }
 
-      // Attendi un momento per assicurarsi che il logout sia propagato
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Attendi propagazione
+      console.log("⏱️ Layout: Attesa propagazione (500ms)...");
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Redirect al login con reload completo per resettare tutto lo stato
-      console.log("🔄 Redirect a /auth con reload completo...");
-      window.location.href = '/auth';
+      // Redirect alla home
+      console.log("🔄 Layout: Redirect alla home...");
+      console.log("🚪 ========== LAYOUT LOGOUT COMPLETATO ==========");
+      
+      window.location.href = '/';
 
     } catch (err) {
-      console.error("❌ Errore durante logout:", {
-        message: err.message,
-        code: err.code,
-        details: err.details,
-      });
-      alert("Errore durante il logout. Riprova.");
+      console.error("❌ Layout: Errore logout:", err);
+      
+      setUserProfile(null);
+      
+      Object.keys(localStorage)
+        .filter(key => key.startsWith('sb-') || key.includes('supabase'))
+        .forEach(key => localStorage.removeItem(key));
+      
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 500);
     }
   };
 
@@ -136,7 +155,6 @@ export default function Layout() {
     return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
-  // Helper per ottenere il nome completo dell'utente
   const getUserFullName = () => {
     if (userProfile?.nome && userProfile?.cognome) {
       return `${userProfile.nome} ${userProfile.cognome}`;
@@ -150,18 +168,15 @@ export default function Layout() {
     return "Utente";
   };
 
-  // Helper per ottenere il tipo di sottoscrizione
   const getSubscriptionType = () => {
     return userProfile?.subscription_type || user?.user_metadata?.subscription_type || "free";
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200/50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            {/* Logo */}
             <Link to={createPageUrl("Home")} className="flex items-center gap-3 group">
               <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-xl flex items-center justify-center transform group-hover:scale-105 transition-transform">
                 <FileText className="w-6 h-6 text-white" />
@@ -172,12 +187,10 @@ export default function Layout() {
               </div>
             </Link>
 
-            {/* User Menu */}
             <div className="flex items-center gap-3">
               {user ? (
                 <>
                   <Link to={createPageUrl("Settings")}>
-                    {/* @ts-ignore */}
                     <Button variant="ghost" size="icon" className="hover:bg-gray-100 rounded-xl">
                       <SettingsIcon className="w-5 h-5 text-gray-600" />
                     </Button>
@@ -185,18 +198,14 @@ export default function Layout() {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      {/* @ts-ignore */}
                       <Button variant="ghost" className="h-auto p-0 hover:opacity-80">
-                        {/* @ts-ignore */}
                         <Avatar className="w-10 h-10 border-2 border-indigo-200">
-                          {/* @ts-ignore */}
                           <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-blue-500 text-white font-semibold">
                             {getInitials(getUserFullName())}
                           </AvatarFallback>
                         </Avatar>
                       </Button>
                     </DropdownMenuTrigger>
-                    {/* @ts-ignore */}
                     <DropdownMenuContent align="end" className="w-56">
                       <div className="px-3 py-2">
                         <p className="font-semibold text-gray-900">{getUserFullName()}</p>
@@ -220,14 +229,12 @@ export default function Layout() {
                         </div>
                       </div>
                       <DropdownMenuSeparator />
-                      {/* @ts-ignore */}
                       <DropdownMenuItem asChild>
                         <Link to={createPageUrl("Profile")} className="cursor-pointer">
                           <User className="w-4 h-4 mr-2" />
                           Profilo
                         </Link>
                       </DropdownMenuItem>
-                      {/* @ts-ignore */}
                       <DropdownMenuItem asChild>
                         <Link to={createPageUrl("Settings")} className="cursor-pointer">
                           <SettingsIcon className="w-4 h-4 mr-2" />
@@ -235,7 +242,6 @@ export default function Layout() {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      {/* @ts-ignore */}
                       <DropdownMenuItem
                         onClick={(e) => handleLogout(e)}
                         className="cursor-pointer text-red-600"
@@ -245,9 +251,9 @@ export default function Layout() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+
                 </>
               ) : (
-                // @ts-ignore
                 <Button
                   onClick={() => navigate("/auth")}
                   className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
@@ -260,7 +266,6 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="pt-20">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Home />} />
