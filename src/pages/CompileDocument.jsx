@@ -31,6 +31,7 @@ import { profileApi } from "@/api/profileApi";
 import { callAI } from "@/lib/ai";
 import mammoth from "mammoth";
 import { Document, Paragraph, TextRun, HeadingLevel, Packer } from "docx";
+import JSZip from "jszip";
 import UploadStep from "@/components/compile/steps/UploadStep";
 import AnalysisStep from "@/components/compile/steps/AnalysisStep";
 
@@ -98,6 +99,7 @@ export default function CompileDocument() {
   const [extractedText, setExtractedText] = useState('');
   const [identifiedFields, setIdentifiedFields] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [selectedPersonalId, setSelectedPersonalId] = useState('');
   const [profileType, setProfileType] = useState("company");
   const [isCompiling, setIsCompiling] = useState(false);
   const [compiledResult, setCompiledResult] = useState(null);
@@ -130,6 +132,17 @@ export default function CompileDocument() {
     queryFn: async () => {
       if (!user?.id) return null;
       return profileApi.getUserProfile(user.id);
+    },
+    enabled: !!user?.id,
+  });
+
+  // Query per profili personali (placeholder - da implementare se necessario)
+  const { data: personalProfiles = [] } = useQuery({
+    queryKey: ['personalProfiles', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      // TODO: Implementare caricamento profili personali se necessario
+      return [];
     },
     enabled: !!user?.id,
   });
@@ -265,8 +278,915 @@ export default function CompileDocument() {
     return fields;
   };
 
+  // 🧠 DIZIONARIO SEMANTICO: Mappa etichette documento → campi profilo
+  const SEMANTIC_FIELD_DICTIONARY = {
+    ragione_sociale: [
+      'nome',
+      'nome/denominazione',
+      'nome / denominazione',
+      'denominazione',
+      'ragione sociale',
+      'nome operatore economico',
+      "nome dell'operatore economico",
+      'operatore economico',
+      'nome azienda',
+      'nome società',
+      'nome impresa',
+      'denominazione sociale',
+      'ditta',
+      'nome ditta',
+    ],
+    partita_iva: [
+      'partita iva',
+      'partita iva, se applicabile',
+      'p.iva',
+      'p. iva',
+      'piva',
+      'numero di partita iva',
+      'numero partita iva',
+      'codice iva',
+    ],
+    codice_fiscale: [
+      'codice fiscale',
+      'c.f.',
+      'cf',
+      'cod. fiscale',
+      'numero di identificazione nazionale',
+      'altro numero di identificazione nazionale',
+    ],
+    forma_giuridica: [
+      'forma giuridica',
+      "forma giuridica dell'impresa",
+      'tipo società',
+      'natura giuridica',
+    ],
+    indirizzo: [
+      'indirizzo',
+      'indirizzo postale',
+      'via e numero civico',
+      'via',
+      'sede',
+      'sede legale',
+      'indirizzo completo',
+    ],
+    cap: ['cap', 'codice postale', 'c.a.p.'],
+    citta: ['città', 'comune', 'località'],
+    provincia: ['provincia', 'prov.', 'prov'],
+    paese: ['paese', 'stato', 'nazione'],
+    email_aziendale: [
+      'email',
+      'e-mail',
+      'posta elettronica',
+      'indirizzo email',
+      'mail',
+      'pec o mail',
+    ],
+    telefono_aziendale: [
+      'telefono',
+      'tel.',
+      'tel',
+      'cellulare',
+      'numero di telefono',
+      'recapito telefonico',
+    ],
+    pec: ['pec', 'pec o mail', 'posta elettronica certificata'],
+    rappresentante_legale: [
+      'rappresentante legale',
+      'rappresentante',
+      'legale rappresentante',
+      'persone di contatto',
+      'persona di contatto',
+    ],
+    numero_dipendenti: [
+      'numero addetti',
+      'numero dipendenti',
+      'dipendenti',
+      'addetti',
+    ],
+    fatturato_anno_corrente: [
+      'fatturato',
+      'fatturato annuale',
+      "volume d'affari",
+    ],
+    capitale_sociale: ['capitale sociale', 'capitale'],
+    iban: ['iban', 'codice iban'],
+  };
+
+  // 🧠 Funzione per trovare campo profilo da etichetta documento
+  const findProfileFieldByLabel = (label) => {
+    const normalizedLabel = label?.toLowerCase().trim();
+    if (!normalizedLabel) return null;
+
+    for (const [profileField, synonyms] of Object.entries(SEMANTIC_FIELD_DICTIONARY)) {
+      if (
+        synonyms.some((synonym) => {
+          const normalizedSynonym = synonym.toLowerCase();
+          if (normalizedLabel === normalizedSynonym) return true;
+          if (
+            normalizedLabel.includes(normalizedSynonym) ||
+            normalizedSynonym.includes(normalizedLabel)
+          ) {
+            return true;
+          }
+          return false;
+        })
+      ) {
+        return profileField;
+      }
+    }
+
+    return null;
+  };
+
+  // 📦 Compila DOCX lavorando direttamente sul XML (preserva formattazione)
+  const compileDocxPreservingFormat = async (file, profileData) => {
+    console.log("📦 ========== COMPILAZIONE DIRETTA XML ==========");
+    console.log("📦 File:", file.name);
+    console.log("📦 Profilo:", profileData.ragione_sociale);
+    
+    try {
+      // FASE 1: Carica DOCX come ZIP
+      console.log("📦 Fase 1: Caricamento DOCX come ZIP...");
+      const arrayBuffer = await readFileContent(file);
+      if (!(arrayBuffer instanceof ArrayBuffer)) {
+        throw new Error("File deve essere ArrayBuffer");
+      }
+      console.log("📦 ArrayBuffer size:", arrayBuffer.byteLength, "bytes");
+
+      const zip = new JSZip();
+      const docxZip = await zip.loadAsync(arrayBuffer);
+      console.log("✅ ZIP caricato");
+
+      // DEBUG: Analisi completa dello ZIP
+      console.log("🔍 ========== DEBUG ZIP OBJECT ==========");
+      console.log("🔍 Type of docxZip:", typeof docxZip);
+      console.log("🔍 docxZip constructor:", docxZip?.constructor?.name);
+      console.log("🔍 docxZip.files exists:", !!docxZip.files);
+      const allFiles = Object.keys(docxZip.files || {});
+      console.log("🔍 Number of files:", allFiles.length);
+      console.log("🔍 All files in ZIP:");
+      allFiles.forEach((filename, index) => {
+        const file = docxZip.files[filename];
+        console.log(`  ${index + 1}. ${filename}`);
+        console.log(`     - isDir: ${file?.dir}`);
+        console.log(`     - hasData: ${!!file?._data}`);
+      });
+
+      const criticalFiles = [
+        '[Content_Types].xml',
+        '_rels/.rels',
+        'word/document.xml',
+        'word/styles.xml',
+        'word/_rels/document.xml.rels',
+      ];
+      console.log("🔍 Critical files check:");
+      criticalFiles.forEach((filename) => {
+        const exists = !!docxZip.file(filename);
+        console.log(`  ${exists ? '✅' : '❌'} ${filename}`);
+      });
+      console.log("🔍 ========================================");
+
+      // FASE 2: Estrai document.xml (contiene tutto il contenuto)
+      console.log("📦 Fase 2: Estrazione document.xml...");
+      const documentXmlFile = docxZip.file('word/document.xml');
+      if (!documentXmlFile) {
+        console.error("❌ document.xml NON TROVATO nello ZIP!");
+        console.error("📦 File disponibili:", allFiles.filter((f) => f.startsWith('word/')));
+        throw new Error("document.xml non trovato nel DOCX");
+      }
+      console.log("✅ document.xml trovato");
+      
+      let documentXml = await documentXmlFile.async('string');
+      console.log("✅ document.xml estratto, size:", documentXml.length, "caratteri");
+      
+      // FASE 3: Estrai anche il testo per analisi AI
+      console.log("📦 Fase 3: Estrazione testo per AI...");
+      const textResult = await mammoth.extractRawText({ arrayBuffer });
+      const extractedText = textResult.value;
+      console.log("✅ Testo estratto, length:", extractedText.length);
+      
+      // FASE 4: Prepara mappatura campi
+      console.log("📦 Fase 4: Preparazione mappatura campi...");
+      
+      // Mapping ESTESO con TUTTE le varianti possibili
+      const fieldMappings = {
+        // RAGIONE SOCIALE (molte varianti!)
+        'Ragione Sociale': profileData.ragione_sociale || '[DA COMPILARE]',
+        'ragione sociale': profileData.ragione_sociale || '[DA COMPILARE]',
+        'Denominazione': profileData.ragione_sociale || '[DA COMPILARE]',
+        'denominazione': profileData.ragione_sociale || '[DA COMPILARE]',
+        'Nome dell\'operatore economico': profileData.ragione_sociale || '[DA COMPILARE]',
+        'nome dell\'operatore economico': profileData.ragione_sociale || '[DA COMPILARE]',
+        'Nome operatore economico': profileData.ragione_sociale || '[DA COMPILARE]',
+        'Operatore economico': profileData.ragione_sociale || '[DA COMPILARE]',
+        'Nome azienda': profileData.ragione_sociale || '[DA COMPILARE]',
+        'Nome': profileData.ragione_sociale || '[DA COMPILARE]',
+        
+        // PARTITA IVA
+        'Partita IVA': profileData.partita_iva || '[DA COMPILARE]',
+        'partita iva': profileData.partita_iva || '[DA COMPILARE]',
+        'P.IVA': profileData.partita_iva || '[DA COMPILARE]',
+        'P. IVA': profileData.partita_iva || '[DA COMPILARE]',
+        'PIVA': profileData.partita_iva || '[DA COMPILARE]',
+        'Numero di partita IVA': profileData.partita_iva || '[DA COMPILARE]',
+        
+        // CODICE FISCALE
+        'Codice Fiscale': profileData.codice_fiscale || '[DA COMPILARE]',
+        'codice fiscale': profileData.codice_fiscale || '[DA COMPILARE]',
+        'C.F.': profileData.codice_fiscale || '[DA COMPILARE]',
+        'CF': profileData.codice_fiscale || '[DA COMPILARE]',
+        
+        // FORMA GIURIDICA
+        'Forma Giuridica': profileData.forma_giuridica || '[DA COMPILARE]',
+        'forma giuridica': profileData.forma_giuridica || '[DA COMPILARE]',
+        'Forma giuridica': profileData.forma_giuridica || '[DA COMPILARE]',
+        'Tipo società': profileData.forma_giuridica || '[DA COMPILARE]',
+        
+        // INDIRIZZO
+        'Indirizzo': profileData.indirizzo || '[DA COMPILARE]',
+        'indirizzo': profileData.indirizzo || '[DA COMPILARE]',
+        'Via': profileData.indirizzo || '[DA COMPILARE]',
+        'Sede': profileData.indirizzo || '[DA COMPILARE]',
+        'Sede legale': profileData.indirizzo || '[DA COMPILARE]',
+        'Indirizzo completo': profileData.indirizzo || '[DA COMPILARE]',
+        
+        // CAP
+        'CAP': profileData.cap || '[DA COMPILARE]',
+        'cap': profileData.cap || '[DA COMPILARE]',
+        'Codice postale': profileData.cap || '[DA COMPILARE]',
+        
+        // CITTÀ
+        'Città': profileData.citta || '[DA COMPILARE]',
+        'città': profileData.citta || '[DA COMPILARE]',
+        'Comune': profileData.citta || '[DA COMPILARE]',
+        'comune': profileData.citta || '[DA COMPILARE]',
+        'Località': profileData.citta || '[DA COMPILARE]',
+        
+        // PROVINCIA
+        'Provincia': profileData.provincia || '[DA COMPILARE]',
+        'provincia': profileData.provincia || '[DA COMPILARE]',
+        'Prov.': profileData.provincia || '[DA COMPILARE]',
+        'Prov': profileData.provincia || '[DA COMPILARE]',
+        
+        // PAESE
+        'Paese': profileData.paese || 'Italia',
+        'paese': profileData.paese || 'Italia',
+        'Stato': profileData.paese || 'Italia',
+        'stato': profileData.paese || 'Italia',
+        'Nazione': profileData.paese || 'Italia',
+        
+        // CONTATTI
+        'Email': profileData.email_aziendale || '[DA COMPILARE]',
+        'email': profileData.email_aziendale || '[DA COMPILARE]',
+        'E-mail': profileData.email_aziendale || '[DA COMPILARE]',
+        'Posta elettronica': profileData.email_aziendale || '[DA COMPILARE]',
+        'Indirizzo email': profileData.email_aziendale || '[DA COMPILARE]',
+        
+        'Telefono': profileData.telefono_aziendale || '[DA COMPILARE]',
+        'telefono': profileData.telefono_aziendale || '[DA COMPILARE]',
+        'Tel.': profileData.telefono_aziendale || '[DA COMPILARE]',
+        'Tel': profileData.telefono_aziendale || '[DA COMPILARE]',
+        'Cellulare': profileData.telefono_aziendale || '[DA COMPILARE]',
+        'Numero di telefono': profileData.telefono_aziendale || '[DA COMPILARE]',
+        
+        'PEC': profileData.pec || '[DA COMPILARE]',
+        'pec': profileData.pec || '[DA COMPILARE]',
+        'Posta certificata': profileData.pec || '[DA COMPILARE]',
+        
+        // DATI ECONOMICI
+        'Fatturato': profileData.fatturato_anno_corrente || '[DA COMPILARE]',
+        'fatturato': profileData.fatturato_anno_corrente || '[DA COMPILARE]',
+        'Fatturato annuale': profileData.fatturato_anno_corrente || '[DA COMPILARE]',
+        
+        'Capitale Sociale': profileData.capitale_sociale || '[DA COMPILARE]',
+        'capitale sociale': profileData.capitale_sociale || '[DA COMPILARE]',
+        'Capitale': profileData.capitale_sociale || '[DA COMPILARE]',
+        
+        'Numero Dipendenti': profileData.numero_dipendenti || '[DA COMPILARE]',
+        'numero dipendenti': profileData.numero_dipendenti || '[DA COMPILARE]',
+        'Dipendenti': profileData.numero_dipendenti || '[DA COMPILARE]',
+        'N. dipendenti': profileData.numero_dipendenti || '[DA COMPILARE]',
+        
+        // RAPPRESENTANTE
+        'Rappresentante Legale': profileData.rappresentante_legale || '[DA COMPILARE]',
+        'rappresentante legale': profileData.rappresentante_legale || '[DA COMPILARE]',
+        'Rappresentante': profileData.rappresentante_legale || '[DA COMPILARE]',
+        'Legale rappresentante': profileData.rappresentante_legale || '[DA COMPILARE]',
+        
+        // ALTRI
+        'IBAN': profileData.iban || '[DA COMPILARE]',
+        'iban': profileData.iban || '[DA COMPILARE]',
+        
+        'Data': new Date().toLocaleDateString('it-IT'),
+        'data': new Date().toLocaleDateString('it-IT'),
+        'Data odierna': new Date().toLocaleDateString('it-IT'),
+      };
+      
+      console.log("📦 Mappature preparate:", Object.keys(fieldMappings).length);
+      console.log("📦 Dati disponibili:", Object.entries(profileData).filter(([_, v]) => v && v !== '[DA COMPILARE]').length);
+      
+      // FASE 5: Analisi AI con contesto completo
+      console.log("📦 Fase 5: Analisi AI con semantic matching...");
+
+      const availableData = Object.entries(profileData)
+        .filter(([_, value]) => value && value !== '[DA COMPILARE]' && value !== '')
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n');
+
+      const dictionarySummary = Object.entries(SEMANTIC_FIELD_DICTIONARY)
+        .map(
+          ([field, synonyms]) =>
+            `${field} → ${synonyms
+              .slice(0, 5)
+              .join(', ')}${synonyms.length > 5 ? ', ...' : ''}`
+        )
+        .join('\n');
+
+      // Debug: verifica pattern nel testo estratto
+      console.log("🔍 Verifica pattern nel testo estratto...");
+      const ellipsisMatches = extractedText.match(/\[…+\]/g);
+      const dotsMatches = extractedText.match(/\[\.{5,}\]/g);
+      console.log(`   Pattern ellipsis (U+2026): ${ellipsisMatches ? ellipsisMatches.length : 0}`);
+      console.log(`   Pattern dots: ${dotsMatches ? dotsMatches.length : 0}`);
+      if (ellipsisMatches && ellipsisMatches.length > 0) {
+        console.log(`   Esempi ellipsis: ${ellipsisMatches.slice(0, 3).join(', ')}`);
+      }
+      if (dotsMatches && dotsMatches.length > 0) {
+        console.log(`   Esempi dots: ${dotsMatches.slice(0, 3).join(', ')}`);
+      }
+
+      const aiPrompt = `Sei un assistente esperto nella compilazione del DGUE (Documento di Gara Unico Europeo) italiano.
+
+⚠️ ATTENZIONE CRITICA:
+Devi cercare PATTERN VUOTI nel documento, NON i valori già presenti!
+I pattern vuoti sono segnaposto come:
+- Ellipsis Unicode: [……………] (carattere U+2026 ripetuto)
+- Puntini: [................] (punti ripetuti)
+- Underscore: ___________
+
+❌ NON cercare valori come "[R1 S.p.A.]" o "[Manuel]" - questi sono VALORI, non pattern vuoti!
+✅ Cerca invece pattern VUOTI come "[……………]" o "[................]" che devono essere COMPILATI.
+
+DOCUMENTO COMPLETO:
+${extractedText.substring(0, 5000)}${extractedText.length > 5000 ? '\n... (testo troncato per lunghezza)' : ''}
+
+DATI PROFILO DISPONIBILI:
+${availableData}
+
+DIZIONARIO SINONIMI:
+${dictionarySummary}
+
+COMPITO:
+1. Cerca nel documento SOLO pattern VUOTI (es: [……………], [................], _____).
+2. Per OGNI pattern vuoto trovato:
+   a. Leggi l'etichetta del campo PRIMA del pattern (es: "Ragione Sociale: [……………]")
+   b. Usa il dizionario per mappare l'etichetta al campo profilo
+   c. Copia il pattern ESATTO come appare nel documento (conta caratteri, spazi, ecc.)
+   d. Inserisci il valore dal profilo (o "[DA COMPILARE]" se mancante)
+
+ESEMPIO CORRETTO:
+Se nel documento trovi: "Ragione Sociale: [……………]"
+Risposta:
+{
+  "label": "Ragione Sociale",
+  "pattern": "[……………]",
+  "profile_field": "ragione_sociale",
+  "value": "R1 S.p.A.",
+  "confidence": "high"
+}
+
+ESEMPIO SBAGLIATO (NON FARE):
+{
+  "label": "ragione_sociale",
+  "pattern": "[R1 S.p.A.]",  ← SBAGLIATO! Questo è un valore, non un pattern vuoto
+  "profile_field": "ragione_sociale",
+  "value": "R1 S.p.A."
+}
+
+Rispondi SOLO con JSON array (nessun markdown, nessuna spiegazione):
+[
+  {
+    "label": "etichetta esatta dal documento",
+    "pattern": "pattern vuoto ESATTO dal documento (es: [……………])",
+    "profile_field": "campo profilo (es: ragione_sociale)",
+    "value": "valore da inserire dal profilo",
+    "confidence": "high/medium/low"
+  }
+]
+
+Regole STRETTE:
+- Pattern deve essere VUOTO (ellipsis, puntini, underscore), NON un valore
+- Pattern deve essere IDENTICO a quello nel documento
+- Se non trovi pattern vuoti, restituisci array vuoto []
+- Nessun markdown, nessuna spiegazione, SOLO JSON valido`;
+
+      console.log("🤖 Chiamata AI con contesto completo documento...");
+      console.log("📏 Documento length:", extractedText.length, "caratteri");
+      console.log("📊 Dati disponibili:", availableData.split('\n').length, "campi");
+      const aiResponse = await callAI(aiPrompt);
+      console.log("✅ AI risposta ricevuta");
+      console.log("📄 Raw response (primi 500 char):", aiResponse.substring(0, 500));
+      
+      let aiMappings = [];
+      let semanticMappings = [];
+      try {
+        // Parse AI response
+        let cleanResponse = aiResponse
+          .replace(/```json\n?/g, '')
+          .replace(/```\n?/g, '')
+          .replace(/^JSON:\s*/i, '')
+          .trim();
+
+        const jsonMatch = cleanResponse.match(/\[[\s\S]*\]/);
+
+        if (jsonMatch) {
+          aiMappings = JSON.parse(jsonMatch[0]);
+          console.log("✅ AI ha identificato", aiMappings.length, "campi");
+
+          // Log con confidence
+          aiMappings.forEach((mapping, i) => {
+            const confidence = mapping.confidence || 'unknown';
+            console.log(
+              `  ${i + 1}. [${confidence}] "${mapping.label}" → ${mapping.profile_field} = "${mapping.value}"`
+            );
+          });
+
+          // Validazione: verifica che i pattern siano VUOTI, non valori
+          const validMappings = [];
+          const invalidMappings = [];
+          
+          aiMappings.forEach((mapping) => {
+            const pattern = mapping.pattern || '';
+            // Verifica se il pattern è un pattern vuoto (ellipsis, puntini, underscore) o un valore
+            const isEllipsis = /\[…+\]/.test(pattern);
+            const isDots = /\[\.{3,}\]/.test(pattern);
+            const isUnderscore = /_{3,}/.test(pattern);
+            const isValue = /\[[^\…\._]{1,50}\]/.test(pattern); // Pattern che contiene testo normale
+            
+            if (isEllipsis || isDots || isUnderscore) {
+              // Pattern valido (vuoto)
+              validMappings.push(mapping);
+            } else if (isValue) {
+              // Pattern invalido (sembra un valore, non un pattern vuoto)
+              console.warn(`⚠️ AI ha generato pattern invalido (sembra un valore): "${pattern}"`);
+              invalidMappings.push(mapping);
+            } else {
+              // Pattern non riconosciuto, assumiamo valido
+              validMappings.push(mapping);
+            }
+            
+            // Validazione semantic matching
+            const dictionaryField = findProfileFieldByLabel(mapping.label);
+            if (dictionaryField && dictionaryField !== mapping.profile_field) {
+              console.warn(
+                `⚠️ AI ha mappato "${mapping.label}" → ${mapping.profile_field}, dizionario suggerisce ${dictionaryField}`
+              );
+              if (!mapping.value || mapping.value === '[DA COMPILARE]') {
+                mapping.profile_field = dictionaryField;
+                mapping.value = profileData[dictionaryField] || '[DA COMPILARE]';
+                console.log(
+                  `  ✓ Corretto usando dizionario: ${dictionaryField} = ${mapping.value}`
+                );
+              }
+            }
+          });
+          
+          console.log(`✅ Pattern validi (vuoti): ${validMappings.length}`);
+          console.log(`❌ Pattern invalidi (valori): ${invalidMappings.length}`);
+          
+          // Usa solo pattern validi
+          aiMappings = validMappings;
+          
+          // Se ci sono troppi pattern invalidi, l'AI ha sbagliato - usa fallback
+          if (invalidMappings.length > validMappings.length) {
+            console.warn("⚠️ AI ha generato troppi pattern invalidi, uso fallback diretto...");
+            aiMappings = [];
+          }
+        } else {
+          console.warn("⚠️ AI non ha restituito JSON valido");
+        }
+      } catch (err) {
+        console.error("❌ Errore parsing AI:", err.message);
+      }
+
+      // FALLBACK: se AI non ha trovato pattern validi, cerca direttamente ellipsis nel documento
+      if (aiMappings.length === 0) {
+        console.log("🔍 Fallback: ricerca diretta pattern ellipsis nel documento...");
+        
+        // Cerca pattern ellipsis Unicode U+2026
+        const ellipsisPattern = /\[…+\]/g;
+        const ellipsisMatches = [...extractedText.matchAll(ellipsisPattern)];
+        console.log(`   Trovati ${ellipsisMatches.length} pattern ellipsis`);
+        
+        ellipsisMatches.forEach((match, index) => {
+          const patternText = match[0];
+          const patternIndex = match.index;
+          
+          // Estrai contesto: 100 caratteri PRIMA del pattern
+          const contextStart = Math.max(0, patternIndex - 100);
+          const contextBefore = extractedText.substring(contextStart, patternIndex);
+          
+          // Estrai ultima riga (etichetta campo)
+          const lines = contextBefore.split('\n');
+          let label = '';
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i].trim();
+            if (line.length > 0 && !line.match(/^[^\w]*$/)) {
+              label = line.replace(/[:：]/g, '').trim();
+              break;
+            }
+          }
+          
+          if (label) {
+            // Cerca campo profilo usando dizionario
+            const profileField = findProfileFieldByLabel(label);
+            if (profileField) {
+              const value = profileData[profileField];
+              if (value && value !== '[DA COMPILARE]' && value !== '') {
+                aiMappings.push({
+                  label: label,
+                  pattern: patternText,
+                  profile_field: profileField,
+                  value: value,
+                  source: 'fallback-ellipsis'
+                });
+                console.log(`   ✅ ${index + 1}. "${label}" → ${profileField} = "${value}"`);
+              }
+            }
+          }
+        });
+        
+        console.log(`✅ Fallback completato: ${aiMappings.length} mapping creati`);
+      }
+
+      /* ❌ FALLBACK UNIVERSALE DISABILITATO
+      // Questo blocco causava il problema di sovrascrivere tutti i campi con valori predefiniti
+      if (aiMappings.length === 0) {
+        console.log("⚠️ AI fallita, uso pattern recognition manuale...");
+
+        const patterns = [
+          { regex: /\[\.{5,}\]/g, type: 'dots_bracket' },
+          { regex: /_{10,}/g, type: 'underscore' },
+          { regex: /\[\s{5,}\]/g, type: 'spaces_bracket' },
+        ];
+
+        patterns.forEach(({ regex, type }) => {
+          const matches = [...extractedText.matchAll(regex)];
+          console.log(`  Trovati ${matches.length} pattern tipo "${type}"`);
+        });
+
+        Object.entries(SEMANTIC_FIELD_DICTIONARY).forEach(([profileField, synonyms]) => {
+          const value = profileData[profileField];
+          if (!value || value === '[DA COMPILARE]') return;
+
+          synonyms.forEach((synonym) => {
+            const synonymRegex = new RegExp(`${synonym}[:\\s]*\\[\\.{5,}\\]`, 'gi');
+            const matches = [...extractedText.matchAll(synonymRegex)];
+            if (matches.length > 0) {
+              matches.forEach((match) => {
+                const bracketMatch = match[0].match(/\[\.+\]/);
+                if (!bracketMatch) return;
+                semanticMappings.push({
+                  label: synonym,
+                  pattern: bracketMatch[0],
+                  profile_field: profileField,
+                  value,
+                  confidence: 'manual',
+                });
+              });
+            }
+          });
+        });
+
+        if (semanticMappings.length > 0) {
+          console.log("✅ Semantic matching manuale trovato", semanticMappings.length, "campi");
+          aiMappings = semanticMappings;
+        }
+      }
+      */
+      console.log("\n⚠️ Fallback universale DISABILITATO - uso solo mapping intelligente");
+
+      console.log("\n🔍 ========== DEBUG MAPPING CREATI ==========");
+      console.log(`📦 Totale mapping da applicare: ${aiMappings.length}`);
+      if (aiMappings.length === 0) {
+        console.error("❌ NESSUN MAPPING CREATO!");
+        console.error("❌ Verifica:");
+        console.error("   1. Sezioni identificate correttamente?");
+        console.error("   2. Pattern trovati?");
+        console.error("   3. Label riconosciute?");
+      } else {
+        console.log("\n📋 Lista mapping creati:");
+        aiMappings.forEach((m, i) => {
+          console.log(`${i + 1}. [${m.section || 'UNKNOWN'}] "${m.label}"`);
+          console.log(`   Pattern: "${m.pattern.substring(0, 20)}..."`);
+          console.log(`   Campo: ${m.field || m.profile_field || 'N/A'}`);
+          console.log(`   Valore: "${m.value}"`);
+          console.log(`   Source: ${m.source || m.confidence || 'N/A'}`);
+          console.log("");
+        });
+      }
+      console.log("🔍 ========== FINE DEBUG ==========\n");
+      
+      // FASE 6: Sostituisci nel XML (SENZA DUPLICAZIONE)
+      console.log("📦 Fase 6: Sostituzione campi nel XML...");
+      let replacementCount = 0;
+      const replacedPatterns = new Set();
+      const xmlSizeBefore = documentXml.length;
+      console.log("📦 XML size PRIMA sostituzioni:", xmlSizeBefore, "caratteri");
+      
+      // Debug: verifica pattern nell'XML
+      const ellipsisInXml = documentXml.match(/\[…+\]/g);
+      const dotsInXml = documentXml.match(/\[\.{3,}\]/g);
+      console.log(`🔍 Pattern nell'XML: ellipsis=${ellipsisInXml ? ellipsisInXml.length : 0}, dots=${dotsInXml ? dotsInXml.length : 0}`);
+      if (ellipsisInXml && ellipsisInXml.length > 0) {
+        console.log(`   Esempi ellipsis XML: ${ellipsisInXml.slice(0, 3).join(', ')}`);
+      }
+
+      aiMappings.forEach(({ label, pattern, value }, index) => {
+        if (!pattern || !value || value === '[DA COMPILARE]') {
+          console.log(`  ${index + 1}. SKIP "${label}" (valore mancante)`);
+          return;
+        }
+
+        if (replacedPatterns.has(pattern)) {
+          console.log(`  ${index + 1}. SKIP "${label}" (già sostituito)`);
+          return;
+        }
+
+        console.log(`  ${index + 1}. Elaboro "${label}"`);
+        console.log(`     Pattern: "${pattern.substring(0, 50)}..."`);
+        console.log(`     Valore: "${value}"`);
+
+        const safeValue = String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+
+        // Escape pattern per regex, gestendo anche ellipsis Unicode (U+2026)
+        let escapedPattern = pattern
+          .replace(/\\/g, '\\\\')  // Escape backslash per primo
+          .replace(/\[/g, '\\[')
+          .replace(/\]/g, '\\]')
+          .replace(/\./g, '\\.')
+          .replace(/\+/g, '\\+')
+          .replace(/\*/g, '\\*')
+          .replace(/\?/g, '\\?')
+          .replace(/\^/g, '\\^')
+          .replace(/\$/g, '\\$')
+          .replace(/\(/g, '\\(')
+          .replace(/\)/g, '\\)')
+          .replace(/\|/g, '\\|')
+          .replace(/…/g, '…'); // Ellipsis Unicode (U+2026) - non serve escape, ma assicuriamoci che sia gestito
+
+        const matchRegex = new RegExp(escapedPattern, 'g');
+        const matchesBefore = documentXml.match(matchRegex);
+        const matchCount = matchesBefore ? matchesBefore.length : 0;
+
+        if (matchCount > 0) {
+          console.log(`     ✓ Trovati ${matchCount} match`);
+          let replaced = false;
+          const singleRegex = new RegExp(escapedPattern);
+          documentXml = documentXml.replace(singleRegex, () => {
+            if (!replaced) {
+              replaced = true;
+              replacementCount++;
+              replacedPatterns.add(pattern);
+              return safeValue;
+            }
+            return arguments[0];
+          });
+
+          if (matchCount > 1) {
+            console.log(`     ⚠️ Ci sono altre ${matchCount - 1} occorrenze, le sostituisco...`);
+            const globalRegex = new RegExp(escapedPattern, 'g');
+            documentXml = documentXml.replace(globalRegex, safeValue);
+            console.log(`     ✅ Sostituite tutte le ${matchCount} occorrenze`);
+          } else {
+            console.log(`     ✅ Sostituito 1x con "${safeValue.substring(0, 30)}..."`);
+          }
+        } else {
+          console.log(`     ⚠️ Pattern non trovato nel XML`);
+          
+          // Debug: cerca pattern ellipsis nell'XML
+          if (pattern.includes('…')) {
+            // Cerca ellipsis Unicode direttamente nell'XML
+            const ellipsisInXml = documentXml.match(/\[…+\]/g);
+            if (ellipsisInXml && ellipsisInXml.length > 0) {
+              console.log(`     ℹ️ Trovati ${ellipsisInXml.length} pattern ellipsis nell'XML (ma pattern specifico non matchato)`);
+              // Il pattern specifico non è stato trovato, potrebbe essere un problema di encoding
+              // Non sostituiamo qui per evitare di sostituire pattern sbagliati
+            } else {
+              // Cerca ellipsis codificato in modo diverso (es: entità XML)
+              const ellipsisEntity = documentXml.match(/\[&hellip;+\]|\[&#8230;+\]/g);
+              if (ellipsisEntity && ellipsisEntity.length > 0) {
+                console.log(`     ℹ️ Trovati pattern ellipsis come entità XML: ${ellipsisEntity.length}`);
+              }
+            }
+          } else if (pattern.includes('[') && pattern.includes(']')) {
+            const dotsOnly = pattern.match(/\[\.+\]/);
+            if (dotsOnly) {
+              const simplifiedPattern = dotsOnly[0]
+                .replace(/\[/g, '\\[')
+                .replace(/\]/g, '\\]')
+                .replace(/\./g, '\\.');
+              const simplifiedRegex = new RegExp(simplifiedPattern, 'g');
+              const simplifiedMatches = documentXml.match(simplifiedRegex);
+              if (simplifiedMatches && simplifiedMatches.length > 0) {
+                console.log(`     ℹ️ Trovato pattern semplificato: ${simplifiedMatches.length}x`);
+              }
+            }
+          }
+        }
+
+        const currentXmlSize = documentXml.length;
+        if (currentXmlSize > xmlSizeBefore * 2) {
+          console.error(
+            `❌ ANOMALIA: XML raddoppiato! Before: ${xmlSizeBefore}, Now: ${currentXmlSize}`
+          );
+          throw new Error("Errore sostituzione: XML sta esplodendo di dimensione");
+        }
+      });
+
+      const xmlSizeAfter = documentXml.length;
+      console.log("📦 XML size DOPO sostituzioni:", xmlSizeAfter, "caratteri");
+      console.log("📦 Differenza:", xmlSizeAfter - xmlSizeBefore, "caratteri");
+      if (xmlSizeAfter > xmlSizeBefore * 1.5) {
+        console.warn("⚠️ WARNING: XML cresciuto oltre il 50%!");
+        console.warn("   Before:", xmlSizeBefore, "After:", xmlSizeAfter);
+      }
+      if (xmlSizeAfter > 10_000_000) {
+        console.error("❌ ERRORE: XML troppo grande (> 10MB)");
+        throw new Error(`XML troppo grande: ${xmlSizeAfter} bytes. Probabile loop di duplicazione.`);
+      }
+
+      console.log(`✅ Totale sostituzioni effettuate: ${replacementCount}`);
+      console.log(`✅ Pattern unici sostituiti: ${replacedPatterns.size}`);
+      if (replacementCount === 0) {
+        console.error("❌ NESSUNA SOSTITUZIONE EFFETTUATA!");
+        console.log("📄 XML sample (primi 1000 char):", documentXml.substring(0, 1000));
+        console.log("📋 Pattern AI cercati:");
+        aiMappings.forEach((m, i) => {
+          console.log(`  ${i + 1}. "${m.pattern}" per campo "${m.label}"`);
+        });
+        throw new Error(
+          `Nessun campo compilato. Verifica che:
+1. Il DOCX contenga pattern riconoscibili ([....], ____)
+2. I dati del profilo siano completi (/profile)
+3. L'AI stia generando mapping corretti
+`
+        );
+      }
+      
+      // FASE 7: Salva XML modificato e rigenera DOCX
+      console.log("📦 Fase 7: Ricostruzione DOCX...");
+      console.log("🔍 ========== DEBUG XML MODIFICATO ==========");
+      console.log("🔍 XML length:", documentXml.length, "characters");
+      console.log("🔍 XML starts with:", documentXml.substring(0, 100));
+      console.log("🔍 XML ends with:", documentXml.substring(Math.max(0, documentXml.length - 100)));
+      const xmlStartsValid =
+        documentXml?.trim().startsWith('<?xml') || documentXml?.trim().startsWith('<w:document');
+      console.log("🔍 XML starts valid:", xmlStartsValid);
+      if (!xmlStartsValid) {
+        console.error("❌ XML non inizia correttamente!");
+      }
+      console.log("🔍 ==========================================");
+
+      try {
+        console.log("🔍 Tentativo salvataggio document.xml...");
+        docxZip.file('word/document.xml', documentXml);
+        console.log("✅ document.xml salvato");
+        const savedXml = docxZip.file('word/document.xml');
+        if (!savedXml) {
+          console.error("❌ document.xml NON trovato dopo salvataggio!");
+          throw new Error("Salvataggio document.xml fallito");
+        }
+        console.log("✅ document.xml verificato nello ZIP");
+
+        const filesInZip = Object.keys(docxZip.files);
+        console.log("📦 Files nello ZIP:", filesInZip.length);
+        console.log("📦 Files principali:", filesInZip.slice(0, 10).join(', '));
+        const essentialFiles = [
+          '[Content_Types].xml',
+          '_rels/.rels',
+          'word/document.xml',
+          'word/styles.xml',
+          'word/_rels/document.xml.rels',
+        ];
+        const missingFiles = essentialFiles.filter((f) => !docxZip.file(f));
+        if (missingFiles.length > 0) {
+          console.error("❌ File essenziali mancanti:", missingFiles);
+          throw new Error(`ZIP corrotto: mancano ${missingFiles.join(', ')}`);
+        }
+        console.log("✅ ZIP integro, file essenziali presenti");
+
+        console.log("📦 Generazione Blob DOCX...");
+        console.log("🔍 ========== DEBUG GENERATE ASYNC ==========");
+        console.log("🔍 Tentativo generazione Blob...");
+        console.log("🔍 Files nello ZIP prima di generate:", filesInZip.length);
+
+        let blob;
+        try {
+          blob = await docxZip.generateAsync({
+            type: 'blob',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            compression: 'DEFLATE',
+            compressionOptions: {
+              level: 6,
+            },
+          });
+          console.log("✅ generateAsync completato");
+        } catch (genError) {
+          console.error("❌ generateAsync FALLITO:", genError);
+          console.error("❌ Error stack:", genError.stack);
+          throw new Error(`generateAsync failed: ${genError.message}`);
+        }
+
+        console.log("🔍 Blob generato:");
+        console.log("🔍 - type:", blob.type);
+        console.log("🔍 - size:", blob.size, "bytes");
+        console.log("🔍 - constructor:", blob.constructor?.name);
+
+        if (blob.size < 5000) {
+          console.error("❌ Blob TROPPO PICCOLO:", blob.size, "bytes");
+          console.error("❌ Probabilmente è XML puro, non DOCX ZIP!");
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const arr = new Uint8Array(e.target.result);
+            const header = String.fromCharCode(...arr.slice(0, 4));
+            console.log("🔍 File header (primi 4 bytes):", header);
+            console.log(
+              "🔍 Hex:",
+              Array.from(arr.slice(0, 10))
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join(' ')
+            );
+            if (header.startsWith('PK')) {
+              console.log("✅ File è uno ZIP (header corretto)");
+            } else if (header.startsWith('<?xm')) {
+              console.error("❌ File è XML puro (non è uno ZIP!)");
+            } else {
+              console.error("❌ Header sconosciuto:", header);
+            }
+          };
+          reader.readAsArrayBuffer(blob.slice(0, 100));
+          throw new Error("Blob generato troppo piccolo - probabilmente XML invece di DOCX");
+        }
+        console.log("🔍 ==========================================");
+
+        // TEST: generazione anche come ArrayBuffer
+        console.log("🔍 TEST: Generazione come ArrayBuffer...");
+        try {
+          const arrayBufferTest = await docxZip.generateAsync({
+            type: 'arraybuffer',
+            compression: 'DEFLATE',
+          });
+          console.log("✅ ArrayBuffer generato, size:", arrayBufferTest.byteLength);
+          const view = new Uint8Array(arrayBufferTest);
+          const isPK = view[0] === 0x50 && view[1] === 0x4b;
+          console.log("🔍 ArrayBuffer ha header ZIP (PK):", isPK);
+          if (!isPK) {
+            console.error("❌ ArrayBuffer NON è uno ZIP valido!");
+            console.log("🔍 Primi 20 bytes:", Array.from(view.slice(0, 20)));
+          } else if (arrayBufferTest.byteLength > 5000) {
+            console.log("✅ ArrayBuffer valido, uso questo per creare Blob...");
+            blob = new Blob([arrayBufferTest], {
+              type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            });
+            console.log("✅ Blob ricreato da ArrayBuffer, size:", blob.size);
+          } else {
+            console.warn("⚠️ ArrayBuffer generato ma dimensione ridotta:", arrayBufferTest.byteLength);
+          }
+        } catch (arrErr) {
+          console.error("❌ Test ArrayBuffer fallito:", arrErr);
+        }
+
+        console.log("✅ ========== COMPILAZIONE COMPLETATA ==========");
+        console.log("✅ DOCX finale size:", blob.size, "bytes");
+        console.log("✅ Sostituzioni effettuate:", replacementCount);
+        console.log("✅ Formattazione originale: PRESERVATA");
+
+        return blob;
+      } catch (zipErr) {
+        console.error("❌ Errore generazione DOCX:", zipErr);
+        console.error("❌ Stack:", zipErr.stack);
+        throw new Error(`Impossibile generare DOCX: ${zipErr.message}`);
+      }
+      
+    } catch (err) {
+      console.error("❌ Errore compilazione XML:", err);
+      throw new Error(`Impossibile compilare documento: ${err.message}`);
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     FUNZIONI LEGACY (mantenute come fallback)
+     Se compileDocxPreservingFormat fallisce, si possono riattivare
+     ═══════════════════════════════════════════════════════════ */
+
   // 📖 Estrae testo da DOCX usando mammoth
-  const extractTextFromDocx = async (file) => {
+  /* const extractTextFromDocx = async (file) => {
     console.log("📖 ========== ESTRAZIONE TESTO DOCX ==========");
     console.log("📖 File:", file.name);
 
@@ -297,10 +1217,10 @@ export default function CompileDocument() {
       console.error("❌ Errore estrazione testo:", err);
       throw new Error(`Errore estrazione DOCX: ${err.message}`);
     }
-  };
+  }; */
 
   // 🤖 AI compila il documento identificando campi vuoti
-  const compileWithAI = async (extractedText, profileData, fileName) => {
+  /* const compileWithAI = async (extractedText, profileData, fileName) => {
     console.log("🤖 ========== COMPILAZIONE AI ==========");
     console.log("🤖 Testo da compilare, length:", extractedText.length);
     console.log("🤖 Profilo:", profileData.ragione_sociale);
@@ -405,10 +1325,10 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
       console.error("❌ Errore compilazione AI:", err);
       throw err;
     }
-  };
+  }; */
 
   // 📦 Genera DOCX formattato da testo compilato
-  const generateDocx = async (compiledText, originalFileName) => {
+  /* const generateDocx = async (compiledText, originalFileName) => {
     console.log("📦 ========== GENERAZIONE DOCX ==========");
     console.log("📦 Testo da convertire, length:", compiledText.length);
 
@@ -477,7 +1397,7 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
       console.error("❌ Errore generazione DOCX:", err);
       throw new Error(`Errore generazione DOCX: ${err.message}`);
     }
-  };
+  }; */
 
   const handleCompile = async () => {
     console.log("🔴 DEBUG: ========================================");
@@ -515,30 +1435,34 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
       let profileData = {};
       if (profileType === "company" && selectedCompany) {
         profileData = { ...selectedCompany };
+      } else if (profileType === "personal" && selectedPersonalId) {
+        const selectedPersonal = personalProfiles.find(p => p.id === selectedPersonalId);
+        if (selectedPersonal) {
+          profileData = { ...selectedPersonal };
+        }
       } else if (userProfile) {
         profileData = { ...userProfile };
       }
 
-      console.log("🚀 ========== SISTEMA UNIVERSALE AI ==========");
-
       const file = uploadedFiles[0];
       console.log("📄 File:", file.name);
-      console.log("📊 Profilo:", profileData.ragione_sociale);
+      console.log("📊 Profilo:", profileData.ragione_sociale || profileData.nome || "N/A");
 
-      // FASE 1: Estrazione testo da DOCX
-      console.log("🔄 FASE 1: Estrazione testo...");
+      // ✅ NUOVO: Usa compileDocxPreservingFormat (preserva formattazione originale)
+      console.log("📦 Usando sistema XML diretto...");
+      const compiledBlob = await compileDocxPreservingFormat(file, profileData);
+
+      /* ❌ VECCHIO SISTEMA (COMMENTATO come fallback)
+      console.log("🚀 ========== SISTEMA UNIVERSALE AI ==========");
+      console.log("🔄 FASE 1/3: Estrazione testo da DOCX...");
       const extractedText = await extractTextFromDocx(file);
 
-      // FASE 2: Compilazione intelligente con AI
-      console.log("🔄 FASE 2: Compilazione AI...");
+      console.log("🔄 FASE 2/3: Compilazione con AI...");
       const compiledText = await compileWithAI(extractedText, profileData, file.name);
 
-      // FASE 3: Generazione DOCX formattato
-      console.log("🔄 FASE 3: Generazione DOCX...");
+      console.log("🔄 FASE 3/3: Generazione DOCX formattato...");
       const compiledBlob = await generateDocx(compiledText, file.name);
-
-      console.log("✅ Sistema universale completato");
-      console.log("📦 Blob finale, size:", compiledBlob.size, "bytes");
+      */
 
       setCompiledResult(compiledBlob);
       setCurrentStep(STEPS.DOWNLOAD);
@@ -554,6 +1478,8 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
   };
 
   const downloadCompiledDocument = () => {
+    console.log("📥 ========== DOWNLOAD DOCUMENTO ==========");
+
     if (!compiledResult) {
       alert("Nessun documento da scaricare");
       return;
@@ -561,26 +1487,43 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
 
     try {
       const originalName =
-        uploadedFiles[0]?.name.replace(/\.[^/.]+$/, "") || "documento";
+        uploadedFiles[0]?.name?.replace(/\.[^/.]+$/, "") || "documento";
       const filename = `${originalName}_compilato_${Date.now()}.docx`;
 
-      console.log("📥 Download:", filename);
+      console.log("📥 Download file:", filename);
+      console.log("📥 Blob type:", compiledResult.type);
+      console.log("📥 Blob size:", compiledResult.size ?? 'N/A');
+
+      if (!(compiledResult instanceof Blob)) {
+        console.error("❌ compiledResult non è un Blob:", typeof compiledResult);
+        alert("Errore: documento non valido");
+        return;
+      }
+
+      if (compiledResult.size < 1024) {
+        console.error("❌ File troppo piccolo:", compiledResult.size);
+        alert("Errore: documento generato sembra corrotto (troppo piccolo)");
+        return;
+      }
 
       const url = window.URL.createObjectURL(compiledResult);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
+      a.style.display = "none";
       document.body.appendChild(a);
+
+      console.log("📥 Triggering download...");
       a.click();
 
       setTimeout(() => {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-        console.log("✅ Download completato");
+        console.log("✅ ========== DOWNLOAD COMPLETATO ==========");
       }, 100);
     } catch (err) {
       console.error("❌ Errore download:", err);
-      alert("Errore download");
+      alert(`Errore download: ${err.message}`);
     }
   };
 
