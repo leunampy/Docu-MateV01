@@ -30,7 +30,7 @@ import { listCompanyProfiles } from "@/api/companyProfilesApi";
 import { profileApi } from "@/api/profileApi";
 import { callAI } from "@/lib/ai";
 import { detectAllPatterns, extractLabelFromContext } from "@/lib/patternDetection";
-import { analyzeDocumentWithAI } from "@/lib/aiVisionAnalysis";
+import { analyzeDocumentWithClaude } from "@/lib/claude-client";
 import mammoth from "mammoth";
 import { Document, Paragraph, TextRun, HeadingLevel, Packer } from "docx";
 import JSZip from "jszip";
@@ -603,8 +603,8 @@ export default function CompileDocument() {
         pattern.label = extractLabelFromContext(pattern.contextBefore);
       });
 
-      // 3. Analisi AI per context-awareness
-      const aiMappingsRaw = await analyzeDocumentWithAI(extractedText, allPatterns, profileData);
+      // 3. Analisi Claude per context-awareness
+      const aiMappingsRaw = await analyzeDocumentWithClaude(extractedText, allPatterns, profileData);
 
       // 4. Crea mapping finale
       let aiMappings = aiMappingsRaw

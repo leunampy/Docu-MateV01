@@ -8,9 +8,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:claude": "node test-claude-connection.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@base44/sdk": "^0.8.3",
     "@base44/vite-plugin": "^0.2.0",
     "@hello-pangea/dnd": "^17.0.0",
