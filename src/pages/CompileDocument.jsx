@@ -29,6 +29,8 @@ import { supabase } from "@/api/supabaseClient";
 import { listCompanyProfiles } from "@/api/companyProfilesApi";
 import { profileApi } from "@/api/profileApi";
 import { callAI } from "@/lib/ai";
+import { detectAllPatterns, extractLabelFromContext } from "@/lib/patternDetection";
+import { analyzeDocumentWithAI } from "@/lib/aiVisionAnalysis";
 import mammoth from "mammoth";
 import { Document, Paragraph, TextRun, HeadingLevel, Packer } from "docx";
 import JSZip from "jszip";
@@ -585,312 +587,101 @@ export default function CompileDocument() {
       console.log("📦 Mappature preparate:", Object.keys(fieldMappings).length);
       console.log("📦 Dati disponibili:", Object.entries(profileData).filter(([_, v]) => v && v !== '[DA COMPILARE]').length);
       
-      // FASE 5: Analisi AI con contesto completo
-      console.log("📦 Fase 5: Analisi AI con semantic matching...");
+      // FASE 5: Sistema Modulare Multi-Pattern + AI
+      console.log("📦 Fase 5: Analisi Multi-Pattern + AI...");
 
-      const availableData = Object.entries(profileData)
-        .filter(([_, value]) => value && value !== '[DA COMPILARE]' && value !== '')
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n');
+      // 1. Rileva TUTTI i pattern (universale)
+      const allPatterns = detectAllPatterns(extractedText);
 
-      const dictionarySummary = Object.entries(SEMANTIC_FIELD_DICTIONARY)
-        .map(
-          ([field, synonyms]) =>
-            `${field} → ${synonyms
-              .slice(0, 5)
-              .join(', ')}${synonyms.length > 5 ? ', ...' : ''}`
-        )
-        .join('\n');
-
-      // Debug: verifica pattern nel testo estratto
-      console.log("🔍 Verifica pattern nel testo estratto...");
-      const ellipsisMatches = extractedText.match(/\[…+\]/g);
-      const dotsMatches = extractedText.match(/\[\.{5,}\]/g);
-      console.log(`   Pattern ellipsis (U+2026): ${ellipsisMatches ? ellipsisMatches.length : 0}`);
-      console.log(`   Pattern dots: ${dotsMatches ? dotsMatches.length : 0}`);
-      if (ellipsisMatches && ellipsisMatches.length > 0) {
-        console.log(`   Esempi ellipsis: ${ellipsisMatches.slice(0, 3).join(', ')}`);
-      }
-      if (dotsMatches && dotsMatches.length > 0) {
-        console.log(`   Esempi dots: ${dotsMatches.slice(0, 3).join(', ')}`);
+      if (allPatterns.length === 0) {
+        console.warn("⚠️ Nessun pattern trovato nel documento");
+        throw new Error("Nessun pattern da compilare trovato nel documento");
       }
 
-      const aiPrompt = `Sei un assistente esperto nella compilazione del DGUE (Documento di Gara Unico Europeo) italiano.
+      // 2. Estrai label da contesto per ogni pattern
+      allPatterns.forEach(pattern => {
+        pattern.label = extractLabelFromContext(pattern.contextBefore);
+      });
 
-⚠️ ATTENZIONE CRITICA:
-Devi cercare PATTERN VUOTI nel documento, NON i valori già presenti!
-I pattern vuoti sono segnaposto come:
-- Ellipsis Unicode: [……………] (carattere U+2026 ripetuto)
-- Puntini: [................] (punti ripetuti)
-- Underscore: ___________
+      // 3. Analisi AI per context-awareness
+      const aiMappingsRaw = await analyzeDocumentWithAI(extractedText, allPatterns, profileData);
 
-❌ NON cercare valori come "[R1 S.p.A.]" o "[Manuel]" - questi sono VALORI, non pattern vuoti!
-✅ Cerca invece pattern VUOTI come "[……………]" o "[................]" che devono essere COMPILATI.
+      // 4. Crea mapping finale
+      let aiMappings = aiMappingsRaw
+        .filter(m => m.should_compile && m.value && m.value !== '[DA COMPILARE]')
+        .map(m => {
+          const pattern = allPatterns[m.pattern_index];
+          if (!pattern) return null;
+          return {
+            pattern: pattern.pattern,
+            label: m.label,
+            profile_field: m.profile_field,
+            value: m.value,
+            section: m.section,
+            confidence: m.confidence,
+            source: 'ai-vision'
+          };
+        })
+        .filter(m => m && m.pattern); // Rimuovi mapping senza pattern valido
 
-DOCUMENTO COMPLETO:
-${extractedText.substring(0, 5000)}${extractedText.length > 5000 ? '\n... (testo troncato per lunghezza)' : ''}
-
-DATI PROFILO DISPONIBILI:
-${availableData}
-
-DIZIONARIO SINONIMI:
-${dictionarySummary}
-
-COMPITO:
-1. Cerca nel documento SOLO pattern VUOTI (es: [……………], [................], _____).
-2. Per OGNI pattern vuoto trovato:
-   a. Leggi l'etichetta del campo PRIMA del pattern (es: "Ragione Sociale: [……………]")
-   b. Usa il dizionario per mappare l'etichetta al campo profilo
-   c. Copia il pattern ESATTO come appare nel documento (conta caratteri, spazi, ecc.)
-   d. Inserisci il valore dal profilo (o "[DA COMPILARE]" se mancante)
-
-ESEMPIO CORRETTO:
-Se nel documento trovi: "Ragione Sociale: [……………]"
-Risposta:
-{
-  "label": "Ragione Sociale",
-  "pattern": "[……………]",
-  "profile_field": "ragione_sociale",
-  "value": "R1 S.p.A.",
-  "confidence": "high"
-}
-
-ESEMPIO SBAGLIATO (NON FARE):
-{
-  "label": "ragione_sociale",
-  "pattern": "[R1 S.p.A.]",  ← SBAGLIATO! Questo è un valore, non un pattern vuoto
-  "profile_field": "ragione_sociale",
-  "value": "R1 S.p.A."
-}
-
-Rispondi SOLO con JSON array (nessun markdown, nessuna spiegazione):
-[
-  {
-    "label": "etichetta esatta dal documento",
-    "pattern": "pattern vuoto ESATTO dal documento (es: [……………])",
-    "profile_field": "campo profilo (es: ragione_sociale)",
-    "value": "valore da inserire dal profilo",
-    "confidence": "high/medium/low"
-  }
-]
-
-Regole STRETTE:
-- Pattern deve essere VUOTO (ellipsis, puntini, underscore), NON un valore
-- Pattern deve essere IDENTICO a quello nel documento
-- Se non trovi pattern vuoti, restituisci array vuoto []
-- Nessun markdown, nessuna spiegazione, SOLO JSON valido`;
-
-      console.log("🤖 Chiamata AI con contesto completo documento...");
-      console.log("📏 Documento length:", extractedText.length, "caratteri");
-      console.log("📊 Dati disponibili:", availableData.split('\n').length, "campi");
-      const aiResponse = await callAI(aiPrompt);
-      console.log("✅ AI risposta ricevuta");
-      console.log("📄 Raw response (primi 500 char):", aiResponse.substring(0, 500));
+      console.log(`\n📊 Mapping finale: ${aiMappings.length} campi da compilare`);
+      aiMappings.forEach((m, i) => {
+        console.log(`  ${i + 1}. [${m.section || 'UNKNOWN'}] "${m.label}" → ${m.profile_field} = "${m.value}"`);
+      });
       
-      let aiMappings = [];
-      let semanticMappings = [];
-      try {
-        // Parse AI response
-        let cleanResponse = aiResponse
-          .replace(/```json\n?/g, '')
-          .replace(/```\n?/g, '')
-          .replace(/^JSON:\s*/i, '')
-          .trim();
-
-        const jsonMatch = cleanResponse.match(/\[[\s\S]*\]/);
-
-        if (jsonMatch) {
-          aiMappings = JSON.parse(jsonMatch[0]);
-          console.log("✅ AI ha identificato", aiMappings.length, "campi");
-
-          // Log con confidence
-          aiMappings.forEach((mapping, i) => {
-            const confidence = mapping.confidence || 'unknown';
-            console.log(
-              `  ${i + 1}. [${confidence}] "${mapping.label}" → ${mapping.profile_field} = "${mapping.value}"`
-            );
-          });
-
-          // Validazione: verifica che i pattern siano VUOTI, non valori
-          const validMappings = [];
-          const invalidMappings = [];
+      // 🔬 DEBUG: Analisi encoding ellipsis nell'XML
+      console.log("\n🔬 ========== DEBUG ENCODING XML ==========");
+      
+      // Cerca i primi 5 pattern ellipsis nell'XML
+      const xmlEllipsisMatches = [...documentXml.matchAll(/\[…+\]/g)];
+      console.log(`🔬 Pattern ellipsis nell'XML: ${xmlEllipsisMatches.length}`);
+      
+      if (xmlEllipsisMatches.length > 0) {
+        console.log("\n🔬 Primi 5 pattern nell'XML:");
+        xmlEllipsisMatches.slice(0, 5).forEach((match, i) => {
+          const pattern = match[0];
+          const index = match.index;
           
-          aiMappings.forEach((mapping) => {
-            const pattern = mapping.pattern || '';
-            // Verifica se il pattern è un pattern vuoto (ellipsis, puntini, underscore) o un valore
-            const isEllipsis = /\[…+\]/.test(pattern);
-            const isDots = /\[\.{3,}\]/.test(pattern);
-            const isUnderscore = /_{3,}/.test(pattern);
-            const isValue = /\[[^\…\._]{1,50}\]/.test(pattern); // Pattern che contiene testo normale
-            
-            if (isEllipsis || isDots || isUnderscore) {
-              // Pattern valido (vuoto)
-              validMappings.push(mapping);
-            } else if (isValue) {
-              // Pattern invalido (sembra un valore, non un pattern vuoto)
-              console.warn(`⚠️ AI ha generato pattern invalido (sembra un valore): "${pattern}"`);
-              invalidMappings.push(mapping);
-            } else {
-              // Pattern non riconosciuto, assumiamo valido
-              validMappings.push(mapping);
-            }
-            
-            // Validazione semantic matching
-            const dictionaryField = findProfileFieldByLabel(mapping.label);
-            if (dictionaryField && dictionaryField !== mapping.profile_field) {
-              console.warn(
-                `⚠️ AI ha mappato "${mapping.label}" → ${mapping.profile_field}, dizionario suggerisce ${dictionaryField}`
-              );
-              if (!mapping.value || mapping.value === '[DA COMPILARE]') {
-                mapping.profile_field = dictionaryField;
-                mapping.value = profileData[dictionaryField] || '[DA COMPILARE]';
-                console.log(
-                  `  ✓ Corretto usando dizionario: ${dictionaryField} = ${mapping.value}`
-                );
-              }
-            }
-          });
+          // Estrai contesto: 100 char prima e dopo
+          const contextStart = Math.max(0, index - 100);
+          const contextEnd = Math.min(documentXml.length, index + pattern.length + 100);
+          const context = documentXml.substring(contextStart, contextEnd);
           
-          console.log(`✅ Pattern validi (vuoti): ${validMappings.length}`);
-          console.log(`❌ Pattern invalidi (valori): ${invalidMappings.length}`);
+          console.log(`\n  ${i + 1}. Pattern: "${pattern}"`);
+          console.log(`     Index: ${index}`);
+          console.log(`     Contesto XML:`);
+          console.log(`     ...${context}...`);
           
-          // Usa solo pattern validi
-          aiMappings = validMappings;
-          
-          // Se ci sono troppi pattern invalidi, l'AI ha sbagliato - usa fallback
-          if (invalidMappings.length > validMappings.length) {
-            console.warn("⚠️ AI ha generato troppi pattern invalidi, uso fallback diretto...");
-            aiMappings = [];
-          }
-        } else {
-          console.warn("⚠️ AI non ha restituito JSON valido");
-        }
-      } catch (err) {
-        console.error("❌ Errore parsing AI:", err.message);
-      }
-
-      // FALLBACK: se AI non ha trovato pattern validi, cerca direttamente ellipsis nel documento
-      if (aiMappings.length === 0) {
-        console.log("🔍 Fallback: ricerca diretta pattern ellipsis nel documento...");
-        
-        // Cerca pattern ellipsis Unicode U+2026
-        const ellipsisPattern = /\[…+\]/g;
-        const ellipsisMatches = [...extractedText.matchAll(ellipsisPattern)];
-        console.log(`   Trovati ${ellipsisMatches.length} pattern ellipsis`);
-        
-        ellipsisMatches.forEach((match, index) => {
-          const patternText = match[0];
-          const patternIndex = match.index;
-          
-          // Estrai contesto: 100 caratteri PRIMA del pattern
-          const contextStart = Math.max(0, patternIndex - 100);
-          const contextBefore = extractedText.substring(contextStart, patternIndex);
-          
-          // Estrai ultima riga (etichetta campo)
-          const lines = contextBefore.split('\n');
-          let label = '';
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim();
-            if (line.length > 0 && !line.match(/^[^\w]*$/)) {
-              label = line.replace(/[:：]/g, '').trim();
-              break;
-            }
-          }
-          
-          if (label) {
-            // Cerca campo profilo usando dizionario
-            const profileField = findProfileFieldByLabel(label);
-            if (profileField) {
-              const value = profileData[profileField];
-              if (value && value !== '[DA COMPILARE]' && value !== '') {
-                aiMappings.push({
-                  label: label,
-                  pattern: patternText,
-                  profile_field: profileField,
-                  value: value,
-                  source: 'fallback-ellipsis'
-                });
-                console.log(`   ✅ ${index + 1}. "${label}" → ${profileField} = "${value}"`);
-              }
-            }
+          // Analisi caratteri pattern
+          console.log(`     Analisi caratteri pattern:`);
+          for (let j = 0; j < pattern.length; j++) {
+            const char = pattern[j];
+            const code = char.charCodeAt(0);
+            const hex = code.toString(16).toUpperCase().padStart(4, '0');
+            console.log(`       [${j}] '${char}' → U+${hex} (${code})`);
           }
         });
-        
-        console.log(`✅ Fallback completato: ${aiMappings.length} mapping creati`);
       }
-
-      /* ❌ FALLBACK UNIVERSALE DISABILITATO
-      // Questo blocco causava il problema di sovrascrivere tutti i campi con valori predefiniti
-      if (aiMappings.length === 0) {
-        console.log("⚠️ AI fallita, uso pattern recognition manuale...");
-
-        const patterns = [
-          { regex: /\[\.{5,}\]/g, type: 'dots_bracket' },
-          { regex: /_{10,}/g, type: 'underscore' },
-          { regex: /\[\s{5,}\]/g, type: 'spaces_bracket' },
-        ];
-
-        patterns.forEach(({ regex, type }) => {
-          const matches = [...extractedText.matchAll(regex)];
-          console.log(`  Trovati ${matches.length} pattern tipo "${type}"`);
-        });
-
-        Object.entries(SEMANTIC_FIELD_DICTIONARY).forEach(([profileField, synonyms]) => {
-          const value = profileData[profileField];
-          if (!value || value === '[DA COMPILARE]') return;
-
-          synonyms.forEach((synonym) => {
-            const synonymRegex = new RegExp(`${synonym}[:\\s]*\\[\\.{5,}\\]`, 'gi');
-            const matches = [...extractedText.matchAll(synonymRegex)];
-            if (matches.length > 0) {
-              matches.forEach((match) => {
-                const bracketMatch = match[0].match(/\[\.+\]/);
-                if (!bracketMatch) return;
-                semanticMappings.push({
-                  label: synonym,
-                  pattern: bracketMatch[0],
-                  profile_field: profileField,
-                  value,
-                  confidence: 'manual',
-                });
-              });
-            }
-          });
-        });
-
-        if (semanticMappings.length > 0) {
-          console.log("✅ Semantic matching manuale trovato", semanticMappings.length, "campi");
-          aiMappings = semanticMappings;
-        }
+      
+      // Cerca anche pattern con entità XML (&hellip; o &#8230;)
+      const entityMatches = documentXml.match(/\[(&hellip;|&#8230;)+\]/g);
+      if (entityMatches && entityMatches.length > 0) {
+        console.log(`\n🔬 Pattern con entità XML trovati: ${entityMatches.length}`);
+        console.log(`   Esempi: ${entityMatches.slice(0, 3).join(', ')}`);
       }
-      */
-      console.log("\n⚠️ Fallback universale DISABILITATO - uso solo mapping intelligente");
-
-      console.log("\n🔍 ========== DEBUG MAPPING CREATI ==========");
-      console.log(`📦 Totale mapping da applicare: ${aiMappings.length}`);
-      if (aiMappings.length === 0) {
-        console.error("❌ NESSUN MAPPING CREATO!");
-        console.error("❌ Verifica:");
-        console.error("   1. Sezioni identificate correttamente?");
-        console.error("   2. Pattern trovati?");
-        console.error("   3. Label riconosciute?");
-      } else {
-        console.log("\n📋 Lista mapping creati:");
-        aiMappings.forEach((m, i) => {
-          console.log(`${i + 1}. [${m.section || 'UNKNOWN'}] "${m.label}"`);
-          console.log(`   Pattern: "${m.pattern.substring(0, 20)}..."`);
-          console.log(`   Campo: ${m.field || m.profile_field || 'N/A'}`);
-          console.log(`   Valore: "${m.value}"`);
-          console.log(`   Source: ${m.source || m.confidence || 'N/A'}`);
-          console.log("");
-        });
+      
+      // Cerca pattern con puntini normali
+      const dotsMatchesXml = documentXml.match(/\[\.{3,}\]/g);
+      if (dotsMatchesXml && dotsMatchesXml.length > 0) {
+        console.log(`\n🔬 Pattern con puntini trovati: ${dotsMatchesXml.length}`);
+        console.log(`   Esempi: ${dotsMatchesXml.slice(0, 3).join(', ')}`);
       }
-      console.log("🔍 ========== FINE DEBUG ==========\n");
+      
+      console.log("\n🔬 ========== FINE DEBUG ENCODING ==========\n");
       
       // FASE 6: Sostituisci nel XML (SENZA DUPLICAZIONE)
       console.log("📦 Fase 6: Sostituzione campi nel XML...");
       let replacementCount = 0;
-      const replacedPatterns = new Set();
       const xmlSizeBefore = documentXml.length;
       console.log("📦 XML size PRIMA sostituzioni:", xmlSizeBefore, "caratteri");
       
@@ -902,19 +693,17 @@ Regole STRETTE:
         console.log(`   Esempi ellipsis XML: ${ellipsisInXml.slice(0, 3).join(', ')}`);
       }
 
-      aiMappings.forEach(({ label, pattern, value }, index) => {
+      aiMappings.forEach((mapping, index) => {
+        const { label, pattern, value, profile_field } = mapping;
+        
         if (!pattern || !value || value === '[DA COMPILARE]') {
           console.log(`  ${index + 1}. SKIP "${label}" (valore mancante)`);
           return;
         }
 
-        if (replacedPatterns.has(pattern)) {
-          console.log(`  ${index + 1}. SKIP "${label}" (già sostituito)`);
-          return;
-        }
-
         console.log(`  ${index + 1}. Elaboro "${label}"`);
-        console.log(`     Pattern: "${pattern.substring(0, 50)}..."`);
+        console.log(`     Campo: ${profile_field || 'N/A'}`);
+        console.log(`     Pattern: "${pattern}"`);
         console.log(`     Valore: "${value}"`);
 
         const safeValue = String(value)
@@ -945,27 +734,14 @@ Regole STRETTE:
         const matchCount = matchesBefore ? matchesBefore.length : 0;
 
         if (matchCount > 0) {
-          console.log(`     ✓ Trovati ${matchCount} match`);
-          let replaced = false;
-          const singleRegex = new RegExp(escapedPattern);
-          documentXml = documentXml.replace(singleRegex, () => {
-            if (!replaced) {
-              replaced = true;
-              replacementCount++;
-              replacedPatterns.add(pattern);
-              return safeValue;
-            }
-            return arguments[0];
-          });
-
-          if (matchCount > 1) {
-            console.log(`     ⚠️ Ci sono altre ${matchCount - 1} occorrenze, le sostituisco...`);
-            const globalRegex = new RegExp(escapedPattern, 'g');
-            documentXml = documentXml.replace(globalRegex, safeValue);
-            console.log(`     ✅ Sostituite tutte le ${matchCount} occorrenze`);
-          } else {
-            console.log(`     ✅ Sostituito 1x con "${safeValue.substring(0, 30)}..."`);
-          }
+          console.log(`     ✓ Trovati ${matchCount} match nel XML`);
+          
+          // Sostituisci SOLO LA PRIMA occorrenza (non tutte!)
+          const singleRegex = new RegExp(escapedPattern);  // NO flag 'g' = solo prima
+          documentXml = documentXml.replace(singleRegex, safeValue);
+          replacementCount++;
+          
+          console.log(`     ✅ Sostituita PRIMA occorrenza (${matchCount} totali nel documento) con "${safeValue.substring(0, 30)}..."`);
         } else {
           console.log(`     ⚠️ Pattern non trovato nel XML`);
           
@@ -1022,7 +798,6 @@ Regole STRETTE:
       }
 
       console.log(`✅ Totale sostituzioni effettuate: ${replacementCount}`);
-      console.log(`✅ Pattern unici sostituiti: ${replacedPatterns.size}`);
       if (replacementCount === 0) {
         console.error("❌ NESSUNA SOSTITUZIONE EFFETTUATA!");
         console.log("📄 XML sample (primi 1000 char):", documentXml.substring(0, 1000));
