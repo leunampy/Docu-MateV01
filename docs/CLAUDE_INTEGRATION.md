@@ -301,3 +301,5 @@ const response = await callAI('prompt');
 **Ultimo aggiornamento**: 2025-01-XX
 **Versione Claude**: Sonnet 4 (20250514)
 
+
+
