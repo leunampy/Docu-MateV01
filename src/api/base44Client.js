@@ -1,5 +1,7 @@
 // src/api/base44Client.js
-// Versione "locale" del client Base44 che usa Ollama
+// Backward compatibility: re-export da ai-client
+
+import { generateText } from '@/lib/ai-client';
 
 // Helper per creare un'entità mock
 const createMockEntity = (entityName) => {
@@ -70,44 +72,9 @@ const createMockEntity = (entityName) => {
 };
 
 export const base44 = {
-  // Simula la funzione invokeLLM di Base44
+  // Usa generateText da ai-client
   async invokeLLM(prompt) {
-    try {
-      console.log("📤 Invio prompt a Ollama (mistral)...");
-
-      // @ts-ignore
-      const response = await fetch(import.meta.env.VITE_CUSTOM_AI_URL || "http://localhost:11434/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "mistral", // puoi sostituirlo con "phi3" o altro
-          prompt: prompt,
-          stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Errore risposta API: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("📨 Risposta Ollama:", data);
-
-      // Mantiene la stessa struttura che usava Base44
-      return {
-        data: {
-          result: data.response || data.output || "⚠️ Nessuna risposta dal modello.",
-        },
-        success: true,
-      };
-    } catch (error) {
-      console.error("❌ Errore nella chiamata a Ollama:", error);
-      return {
-        data: { result: "Errore durante la generazione del documento." },
-        success: false,
-        error: error.message,
-      };
-    }
+    return await generateText(prompt);
   },
   
   // Entità mock per il salvataggio locale

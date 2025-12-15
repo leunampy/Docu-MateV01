@@ -22,6 +22,9 @@ import GenerateDocument from "@/pages/GenerateDocument";
 import CompileDocument from "@/pages/CompileDocument";
 import Settings from "@/pages/Settings";
 
+// ⚠️ BYPASS AUTH - TEMPORANEO per test locale
+const BYPASS_AUTH = import.meta.env.DEV && true;
+
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -34,6 +37,13 @@ export default function Layout() {
 
   // ✅ Carica userProfile quando user cambia
   React.useEffect(() => {
+    // ⚠️ BYPASS: Skip caricamento profilo da Supabase
+    if (BYPASS_AUTH) {
+      console.log("⚠️ BYPASS AUTH: Skip caricamento userProfile da Supabase");
+      setUserProfile(null); // Non necessario per test
+      return;
+    }
+    
     console.log("🔄 Layout: User changed:", user?.email || "null");
     
     if (!user?.id) {
@@ -174,7 +184,28 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200/50">
+      {/* ⚠️ BYPASS AUTH Banner */}
+      {BYPASS_AUTH && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            background: '#ff9800',
+            color: 'white',
+            padding: '8px',
+            textAlign: 'center',
+            zIndex: 9999,
+            fontSize: '14px',
+            fontWeight: 'bold'
+          }}
+        >
+          ⚠️ AUTH BYPASS ATTIVO - Development Only
+        </div>
+      )}
+      
+      <header className={`fixed left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200/50 ${BYPASS_AUTH ? 'top-10' : 'top-0'}`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3 group">
@@ -254,19 +285,22 @@ export default function Layout() {
 
                 </>
               ) : (
-                <Button
-                  onClick={() => navigate("/auth")}
-                  className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
-                >
-                  Accedi
-                </Button>
+                // ⚠️ BYPASS: Non mostrare bottone login se bypass attivo
+                !BYPASS_AUTH && (
+                  <Button
+                    onClick={() => navigate("/auth")}
+                    className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
+                  >
+                    Accedi
+                  </Button>
+                )
               )}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="pt-20">
+      <main className={BYPASS_AUTH ? "pt-32" : "pt-20"}>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<AuthPage />} />

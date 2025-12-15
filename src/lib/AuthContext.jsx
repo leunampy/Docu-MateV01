@@ -3,8 +3,25 @@ import { supabase } from "@/api/supabaseClient";
 
 const AuthContext = createContext();
 
+// ⚠️ BYPASS AUTH - TEMPORANEO per test locale
+const BYPASS_AUTH = import.meta.env.DEV && true;
+
+// Mock user per bypass
+const mockUser = {
+  id: '28d2056d-60c3-46ef-81c4-eb590d218b8c',
+  email: 'manuel.liberati@gmail.com',
+  user_metadata: {
+    full_name: 'Manuel Liberati'
+  }
+};
+
+if (BYPASS_AUTH) {
+  console.warn('⚠️ BYPASS AUTH ATTIVO - Solo per test development!');
+  console.warn('⚠️ User mock:', mockUser.email);
+}
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(BYPASS_AUTH ? mockUser : null);
   const [loading, setLoading] = useState(false); // ⚠️ QUICK FIX: parte da false per non bloccare
 
   // Funzione di pulizia manuale storage
@@ -40,6 +57,14 @@ export const AuthProvider = ({ children }) => {
 
   // Recupera l'utente attuale all'avvio
   useEffect(() => {
+    // ⚠️ BYPASS: Se bypass attivo, skip Supabase auth
+    if (BYPASS_AUTH) {
+      console.log("⚠️ BYPASS AUTH: Skip Supabase auth, usando mock user");
+      setUser(mockUser);
+      setLoading(false);
+      return;
+    }
+    
     console.log("📍 AuthProvider useEffect started");
     
     const getUser = async () => {
@@ -64,6 +89,11 @@ export const AuthProvider = ({ children }) => {
     };
 
     getUser();
+
+    // ⚠️ BYPASS: Skip listener se bypass attivo
+    if (BYPASS_AUTH) {
+      return;
+    }
 
     // Listener per login/logout in tempo reale
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -109,6 +139,13 @@ export const AuthProvider = ({ children }) => {
 
   // Funzione signOut aggiornata
   const signOut = async () => {
+    // ⚠️ BYPASS: Mock signOut
+    if (BYPASS_AUTH) {
+      console.log("⚠️ BYPASS AUTH: Mock signOut chiamato");
+      setUser(null);
+      return { error: null };
+    }
+    
     console.log("🚪 ========== AuthContext.signOut CHIAMATO ==========");
     console.log("🚪 User prima del signOut:", user?.email);
     
@@ -151,8 +188,12 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
-    signUp: (email, password) => supabase.auth.signUp({ email, password }),
-    signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
+    signUp: BYPASS_AUTH 
+      ? async () => ({ data: { user: mockUser }, error: null })
+      : (email, password) => supabase.auth.signUp({ email, password }),
+    signIn: BYPASS_AUTH
+      ? async () => ({ data: { user: mockUser }, error: null })
+      : (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signOut,
   };
 

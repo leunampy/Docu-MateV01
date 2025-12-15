@@ -147,10 +147,10 @@ export default function Home() {
                   {/* Content */}
                   <div className="flex-1">
                     <h2 className="text-3xl font-bold text-gray-900 mb-3">
-                      Compila Documenti
+                      Compila Documenti 🚧
                     </h2>
                     <p className="text-gray-600 text-lg mb-6">
-                      Compila automaticamente moduli e documenti burocratici esistenti.
+                      Funzione in lavorazione - disponibile a breve. Compila automaticamente moduli e documenti burocratici esistenti.
                     </p>
 
                     <div className="space-y-3">
@@ -171,8 +171,8 @@ export default function Home() {
 
                   {/* CTA */}
                   <div className="mt-6 flex items-center justify-between">
-                    <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
-                      Disponibile
+                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 border-yellow-200">
+                      🚧 In sviluppo
                     </Badge>
                     <ArrowRight className="w-6 h-6 text-blue-600 transform group-hover:translate-x-2 transition-transform" />
                   </div>

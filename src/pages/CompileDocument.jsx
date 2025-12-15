@@ -28,14 +28,42 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/api/supabaseClient";
 import { listCompanyProfiles } from "@/api/companyProfilesApi";
 import { profileApi } from "@/api/profileApi";
-import { callAI } from "@/lib/ai";
-import { detectAllPatterns, extractLabelFromContext } from "@/lib/patternDetection";
-import { analyzeDocumentWithClaude } from "@/lib/claude-client";
+import { callAI, analyzeDocumentWithAI } from "@/lib/ai";
+import { extractPatternsWithContext } from "@/lib/pattern-extractor";
+import { mapPatternsGranular, compileWithGranularMappings } from "@/lib/claude-granular-mapper";
+import { useAuth } from "@/lib/AuthContext";
+
+// ⚠️ BYPASS AUTH - TEMPORANEO per test locale
+const BYPASS_AUTH = import.meta.env.DEV && true;
+
+// Mock profilo aziendale per bypass
+const mockCompanyProfile = {
+  id: 'mock-profile-1',
+  user_id: '28d2056d-60c3-46ef-81c4-eb590d218b8c',
+  ragione_sociale: 'Test Company SRL',
+  partita_iva: '12345678901',
+  codice_fiscale: '12345678901',
+  forma_giuridica: 'SRL',
+  indirizzo: 'Via Test 123',
+  cap: '00100',
+  citta: 'Roma',
+  provincia: 'RM',
+  paese: 'Italia',
+  email_aziendale: 'test@testcompany.it',
+  telefono_aziendale: '+39 06 1234567',
+  pec: 'test@pec.testcompany.it',
+  rappresentante_legale: 'Mario Rossi',
+  numero_dipendenti: '10',
+  fatturato_anno_corrente: '500000',
+  capitale_sociale: '10000',
+  iban: 'IT60X0542811101000000123456'
+};
 import mammoth from "mammoth";
 import { Document, Paragraph, TextRun, HeadingLevel, Packer } from "docx";
 import JSZip from "jszip";
 import UploadStep from "@/components/compile/steps/UploadStep";
 import AnalysisStep from "@/components/compile/steps/AnalysisStep";
+import { toast } from "sonner";
 
 const STEPS = {
   UPLOAD: 1,
@@ -111,31 +139,48 @@ export default function CompileDocument() {
     console.log("🔴 DEBUG: isCompiling changed to:", isCompiling);
   }, [isCompiling]);
 
+  // ⚠️ BYPASS: Usa AuthContext invece di query Supabase
+  const { user: authUser } = useAuth();
+  const user = BYPASS_AUTH ? authUser : null;
+  
   // Carica profili aziendali
-  const { data: user } = useQuery({
+  const { data: userFromQuery } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
+      if (BYPASS_AUTH) return authUser; // Skip Supabase se bypass attivo
       const { data: { user } } = await supabase.auth.getUser();
       return user;
     },
+    enabled: !BYPASS_AUTH, // Disabilita query se bypass attivo
   });
 
+  const finalUser = BYPASS_AUTH ? authUser : userFromQuery;
+
   const { data: companyProfiles = [] } = useQuery({
-    queryKey: ['companyProfiles', user?.id],
+    queryKey: ['companyProfiles', finalUser?.id],
     queryFn: async () => {
-      if (!user?.id) return [];
-      return listCompanyProfiles(user.id);
+      if (BYPASS_AUTH) {
+        // ⚠️ BYPASS: Ritorna mock profile
+        console.log('⚠️ BYPASS AUTH: Usando mock company profile');
+        return [mockCompanyProfile];
+      }
+      if (!finalUser?.id) return [];
+      return listCompanyProfiles(finalUser.id);
     },
-    enabled: !!user?.id,
+    enabled: !!finalUser?.id || BYPASS_AUTH,
   });
 
   const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
+    queryKey: ['userProfile', finalUser?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
-      return profileApi.getUserProfile(user.id);
+      if (BYPASS_AUTH) {
+        // ⚠️ BYPASS: Ritorna null (non necessario per compilazione)
+        return null;
+      }
+      if (!finalUser?.id) return null;
+      return profileApi.getUserProfile(finalUser.id);
     },
-    enabled: !!user?.id,
+    enabled: (!!finalUser?.id || BYPASS_AUTH) && !BYPASS_AUTH,
   });
 
   // Query per profili personali (placeholder - da implementare se necessario)
@@ -150,6 +195,15 @@ export default function CompileDocument() {
   });
 
   const selectedCompany = companyProfiles.find(c => c.id === selectedCompanyId);
+
+  // ⚠️ BYPASS: Auto-seleziona mock profile quando disponibile
+  useEffect(() => {
+    if (BYPASS_AUTH && companyProfiles.length > 0 && !selectedCompanyId) {
+      console.log('⚠️ BYPASS AUTH: Auto-selezione mock company profile');
+      setSelectedCompanyId(mockCompanyProfile.id);
+      setProfileType('company');
+    }
+  }, [companyProfiles, selectedCompanyId]);
 
   // Analisi automatica quando si entra nello step ANALYSIS
   useEffect(() => {
@@ -603,8 +657,8 @@ export default function CompileDocument() {
         pattern.label = extractLabelFromContext(pattern.contextBefore);
       });
 
-      // 3. Analisi Claude per context-awareness
-      const aiMappingsRaw = await analyzeDocumentWithClaude(extractedText, allPatterns, profileData);
+      // 3. Analisi AI per context-awareness
+      const aiMappingsRaw = await analyzeDocumentWithAI(extractedText, allPatterns, profileData);
 
       // 4. Crea mapping finale
       let aiMappings = aiMappingsRaw
@@ -1174,80 +1228,91 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
     }
   }; */
 
+  // Helper: Estrai testo da DOCX
+  const extractTextFromDocx = async (file) => {
+    const arrayBuffer = await readFileContent(file);
+    if (!(arrayBuffer instanceof ArrayBuffer)) {
+      throw new Error("File deve essere ArrayBuffer");
+    }
+    const textResult = await mammoth.extractRawText({ arrayBuffer });
+    return textResult.value;
+  };
+
   const handleCompile = async () => {
-    console.log("🔴 DEBUG: ========================================");
-    console.log("🔴 DEBUG: handleCompile CHIAMATO!");
-    console.log("🔴 DEBUG: Timestamp:", new Date().toISOString());
-    console.log("🔴 DEBUG: uploadedFiles:", uploadedFiles);
-    console.log("🔴 DEBUG: uploadedFiles.length:", uploadedFiles.length);
-    console.log("🔴 DEBUG: profileType:", profileType);
-    console.log("🔴 DEBUG: selectedCompanyId:", selectedCompanyId);
-    console.log("🔴 DEBUG: selectedCompany:", selectedCompany);
-    console.log("🔴 DEBUG: isCompiling:", isCompiling);
-    console.log("🔴 DEBUG: ========================================");
-    console.log("🔧 handleCompile called");
-    
     if (uploadedFiles.length === 0) {
-      console.warn("⚠️ No files to compile");
+      toast.error('Carica almeno un documento');
       setError("Carica almeno un documento per procedere.");
       return;
     }
 
-    if (profileType === "company" && !selectedCompanyId) {
-      console.warn("⚠️ No company profile selected");
+    // Prepara dati profilo
+    let profileData = {};
+    if (profileType === "company" && selectedCompany) {
+      profileData = { ...selectedCompany };
+    } else if (profileType === "personal" && selectedPersonalId) {
+      const selectedPersonal = personalProfiles.find(p => p.id === selectedPersonalId);
+      if (selectedPersonal) {
+        profileData = { ...selectedPersonal };
+      }
+    } else if (userProfile) {
+      profileData = { ...userProfile };
+    }
+
+    if (!profileData || Object.keys(profileData).length === 0) {
+      toast.error('Seleziona un profilo');
       setError("Seleziona un profilo aziendale.");
       return;
     }
 
-    console.log("🚀 Starting compilation process...");
-    console.log("🔴 DEBUG: setIsCompiling(true) - START COMPILATION");
     setIsCompiling(true);
     setError(null);
     setCompiledResult(null);
 
     try {
-      // Prepara dati profilo
-      let profileData = {};
-      if (profileType === "company" && selectedCompany) {
-        profileData = { ...selectedCompany };
-      } else if (profileType === "personal" && selectedPersonalId) {
-        const selectedPersonal = personalProfiles.find(p => p.id === selectedPersonalId);
-        if (selectedPersonal) {
-          profileData = { ...selectedPersonal };
-        }
-      } else if (userProfile) {
-        profileData = { ...userProfile };
-      }
-
+      console.log('🚀 Compilazione GRANULARE...');
+      
       const file = uploadedFiles[0];
-      console.log("📄 File:", file.name);
-      console.log("📊 Profilo:", profileData.ragione_sociale || profileData.nome || "N/A");
-
-      // ✅ NUOVO: Usa compileDocxPreservingFormat (preserva formattazione originale)
-      console.log("📦 Usando sistema XML diretto...");
-      const compiledBlob = await compileDocxPreservingFormat(file, profileData);
-
-      /* ❌ VECCHIO SISTEMA (COMMENTATO come fallback)
-      console.log("🚀 ========== SISTEMA UNIVERSALE AI ==========");
-      console.log("🔄 FASE 1/3: Estrazione testo da DOCX...");
-      const extractedText = await extractTextFromDocx(file);
-
-      console.log("🔄 FASE 2/3: Compilazione con AI...");
-      const compiledText = await compileWithAI(extractedText, profileData, file.name);
-
-      console.log("🔄 FASE 3/3: Generazione DOCX formattato...");
-      const compiledBlob = await generateDocx(compiledText, file.name);
-      */
-
-      setCompiledResult(compiledBlob);
+      
+      // 1. Estrai testo
+      console.log('📄 Estrazione testo...');
+      const text = await extractTextFromDocx(file);
+      console.log('📄 Testo estratto:', text.length, 'caratteri');
+      setExtractedText(text); // Salva per riferimento futuro
+      
+      // 2. Estrai pattern con contesto
+      console.log('🔍 Identificazione pattern...');
+      const patterns = extractPatternsWithContext(text);
+      console.log('🔍 Pattern trovati:', patterns.length);
+      
+      if (patterns.length === 0) {
+        throw new Error('Nessun pattern trovato nel documento');
+      }
+      
+      // 3. Claude mappa pattern-per-pattern
+      console.log(`🤖 Claude sta mappando ${patterns.length} pattern...`);
+      const mappings = await mapPatternsGranular(patterns, profileData);
+      console.log('✅ Mappings ricevuti:', mappings.length);
+      
+      if (mappings.length === 0) {
+        throw new Error('Nessun mapping generato');
+      }
+      
+      // 4. Compila documento
+      console.log('📝 Compilazione documento...');
+      const blob = await compileWithGranularMappings(file, patterns, mappings);
+      
+      setCompiledResult(blob);
       setCurrentStep(STEPS.DOWNLOAD);
-      console.log("📥 Passaggio a DOWNLOAD");
+      
+      const compiledCount = mappings.filter(m => m.compile).length;
+      toast.success(`✅ ${compiledCount} campi compilati!`);
+      console.log('🎉 COMPILAZIONE COMPLETATA');
 
-    } catch (err) {
-      console.error("Compilation error:", err);
-      setError(err.message || "Errore durante la compilazione del documento. Riprova.");
+    } catch (error) {
+      console.error('❌ Errore:', error);
+      setError(error.message || "Errore durante la compilazione del documento. Riprova.");
+      toast.error(error.message || 'Errore durante la compilazione');
     } finally {
-      console.log("🔴 DEBUG: setIsCompiling(false) - END COMPILATION");
       setIsCompiling(false);
     }
   };
@@ -1420,6 +1485,19 @@ GENERA ORA IL DOCUMENTO COMPILATO COMPLETO:`;
                 <>
                   <Loader2 className="w-16 h-16 mx-auto mb-4 text-indigo-600 animate-spin" />
                   <p className="text-lg font-medium">Compilazione in corso...</p>
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                    <div className="flex items-center gap-3">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      <div>
+                        <p className="text-blue-800 font-medium">
+                          Compilazione in corso...
+                        </p>
+                        <p className="text-blue-600 text-sm">
+                          Attendere 30-60 secondi
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <p className="text-gray-600">Pronto per la compilazione</p>
