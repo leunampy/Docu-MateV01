@@ -1,5 +1,5 @@
 app = "docu-matev01"
-primary_region = "ams"
+primary_region = "fra"
 
 [build]
   dockerfile = "Dockerfile"
