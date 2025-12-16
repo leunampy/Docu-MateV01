@@ -16,4 +16,5 @@ RUN echo 'server { \n\
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
+ENTRYPOINT []
 CMD ["/start.sh"]
