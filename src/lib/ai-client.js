@@ -1,43 +1,55 @@
 // src/lib/ai-client.js
-// Client AI con solo Ollama (locale + produzione)
+// Client AI con Cerebras (Llama 3.1 70B)
 
 const CONFIG = {
-  // URL Ollama - in produzione userà l'URL del server Fly.io
-  ollamaUrl: import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434/api/generate',
-  localModel: 'llama3.2:latest',
-  maxTokens: 16000,
+  cerebrasUrl: 'https://api.cerebras.ai/v1/chat/completions',
+  apiKey: import.meta.env.VITE_CEREBRAS_API_KEY,
+  model: 'llama-3.3-70b',
+  maxTokens: 8000,
   temperature: 0.3,
 };
 
-const callOllama = async (prompt, opts = {}) => {
+const callCerebras = async (prompt, opts = {}) => {
   const { systemPrompt = null, temperature = CONFIG.temperature, maxTokens = CONFIG.maxTokens } = opts;
-  const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+  messages.push({ role: 'user', content: prompt });
 
   try {
-    console.log('🤖 Chiamata Ollama...');
-    const response = await fetch(CONFIG.ollamaUrl, {
+    console.log('🤖 Chiamata Cerebras...');
+    const response = await fetch(CONFIG.cerebrasUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CONFIG.apiKey}`,
+      },
       body: JSON.stringify({
-        model: CONFIG.localModel,
-        prompt: fullPrompt,
-        stream: false,
-        options: { temperature, num_predict: maxTokens },
+        model: CONFIG.model,
+        messages: messages,
+        temperature: temperature,
+        max_tokens: maxTokens,
       }),
     });
 
-    if (!response.ok) throw new Error(`Ollama error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Cerebras error ${response.status}: ${errorText}`);
+    }
+    
     const data = await response.json();
     console.log('✅ Risposta ricevuta');
-    return data.response || '';
+    return data.choices[0].message.content || '';
   } catch (error) {
-    console.error('❌ Errore Ollama:', error);
-    throw new Error(`Ollama non disponibile: ${error.message}`);
+    console.error('❌ Errore Cerebras:', error);
+    throw new Error(`AI non disponibile: ${error.message}`);
   }
 };
 
 export const callAI = async (prompt, opts = {}) => {
-  return await callOllama(prompt, opts);
+  return await callCerebras(prompt, opts);
 };
 
 export const analyzeDocumentWithAI = async (text, patterns, profileData) => {
@@ -101,7 +113,7 @@ export const generateText = async (prompt) => {
 export const testAIConnection = async () => {
   try {
     const response = await callAI('Rispondi solo con "OK"', { maxTokens: 10, temperature: 0 });
-    return { success: true, provider: 'ollama', response };
+    return { success: true, provider: 'cerebras', response };
   } catch (error) {
     return { success: false, error: error.message };
   }
