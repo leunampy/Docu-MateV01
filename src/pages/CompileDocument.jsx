@@ -32,32 +32,6 @@ import { callAI, analyzeDocumentWithAI } from "@/lib/ai";
 import { extractPatternsWithContext } from "@/lib/pattern-extractor";
 import { mapPatternsGranular, compileWithGranularMappings } from "@/lib/claude-granular-mapper";
 import { useAuth } from "@/lib/AuthContext";
-
-// ⚠️ BYPASS AUTH - TEMPORANEO per test locale
-const BYPASS_AUTH = import.meta.env.DEV && true;
-
-// Mock profilo aziendale per bypass
-const mockCompanyProfile = {
-  id: 'mock-profile-1',
-  user_id: '28d2056d-60c3-46ef-81c4-eb590d218b8c',
-  ragione_sociale: 'Test Company SRL',
-  partita_iva: '12345678901',
-  codice_fiscale: '12345678901',
-  forma_giuridica: 'SRL',
-  indirizzo: 'Via Test 123',
-  cap: '00100',
-  citta: 'Roma',
-  provincia: 'RM',
-  paese: 'Italia',
-  email_aziendale: 'test@testcompany.it',
-  telefono_aziendale: '+39 06 1234567',
-  pec: 'test@pec.testcompany.it',
-  rappresentante_legale: 'Mario Rossi',
-  numero_dipendenti: '10',
-  fatturato_anno_corrente: '500000',
-  capitale_sociale: '10000',
-  iban: 'IT60X0542811101000000123456'
-};
 import mammoth from "mammoth";
 import { Document, Paragraph, TextRun, HeadingLevel, Packer } from "docx";
 import JSZip from "jszip";
@@ -139,48 +113,36 @@ export default function CompileDocument() {
     console.log("🔴 DEBUG: isCompiling changed to:", isCompiling);
   }, [isCompiling]);
 
-  // ⚠️ BYPASS: Usa AuthContext invece di query Supabase
   const { user: authUser } = useAuth();
-  const user = BYPASS_AUTH ? authUser : null;
   
   // Carica profili aziendali
   const { data: userFromQuery } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
-      if (BYPASS_AUTH) return authUser; // Skip Supabase se bypass attivo
       const { data: { user } } = await supabase.auth.getUser();
       return user;
     },
-    enabled: !BYPASS_AUTH, // Disabilita query se bypass attivo
+    enabled: true,
   });
 
-  const finalUser = BYPASS_AUTH ? authUser : userFromQuery;
+  const finalUser = userFromQuery;
 
   const { data: companyProfiles = [] } = useQuery({
     queryKey: ['companyProfiles', finalUser?.id],
     queryFn: async () => {
-      if (BYPASS_AUTH) {
-        // ⚠️ BYPASS: Ritorna mock profile
-        console.log('⚠️ BYPASS AUTH: Usando mock company profile');
-        return [mockCompanyProfile];
-      }
       if (!finalUser?.id) return [];
       return listCompanyProfiles(finalUser.id);
     },
-    enabled: !!finalUser?.id || BYPASS_AUTH,
+    enabled: !!finalUser?.id,
   });
 
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile', finalUser?.id],
     queryFn: async () => {
-      if (BYPASS_AUTH) {
-        // ⚠️ BYPASS: Ritorna null (non necessario per compilazione)
-        return null;
-      }
       if (!finalUser?.id) return null;
       return profileApi.getUserProfile(finalUser.id);
     },
-    enabled: (!!finalUser?.id || BYPASS_AUTH) && !BYPASS_AUTH,
+    enabled: !!finalUser?.id,
   });
 
   // Query per profili personali (placeholder - da implementare se necessario)
@@ -195,15 +157,6 @@ export default function CompileDocument() {
   });
 
   const selectedCompany = companyProfiles.find(c => c.id === selectedCompanyId);
-
-  // ⚠️ BYPASS: Auto-seleziona mock profile quando disponibile
-  useEffect(() => {
-    if (BYPASS_AUTH && companyProfiles.length > 0 && !selectedCompanyId) {
-      console.log('⚠️ BYPASS AUTH: Auto-selezione mock company profile');
-      setSelectedCompanyId(mockCompanyProfile.id);
-      setProfileType('company');
-    }
-  }, [companyProfiles, selectedCompanyId]);
 
   // Analisi automatica quando si entra nello step ANALYSIS
   useEffect(() => {
