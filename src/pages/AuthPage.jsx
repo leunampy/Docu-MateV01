@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "@/api/supabaseClient";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -85,25 +85,12 @@ export default function AuthPage() {
 
           {isLogin && (
             <div className="text-right mb-4">
-              <button
-                type="button"
-                onClick={async () => {
-                  const email = prompt('Inserisci la tua email per reimpostare la password:');
-                  if (email) {
-                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                      redirectTo: 'https://www.documate.it/auth/reset-password',
-                    });
-                    if (error) {
-                      alert('Errore: ' + error.message);
-                    } else {
-                      alert('✅ Email inviata! Controlla la tua casella di posta.');
-                    }
-                  }
-                }}
+              <Link 
+                to="/forgot-password"
                 className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline"
               >
                 Hai dimenticato la password?
-              </button>
+              </Link>
             </div>
           )}
 
