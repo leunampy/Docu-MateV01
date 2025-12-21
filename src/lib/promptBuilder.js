@@ -714,12 +714,15 @@ export function buildDocumentPrompt(documentType, answers, schema) {
   const context = DOCUMENT_CONTEXTS[documentType.id];
   const template = DOCUMENT_TEMPLATES[documentType.id];
 
-  // Validazione campi obbligatori
+  // Prepara dati formattati per il template
+  const formattedAnswers = formatAnswersForTemplate(answers, schema);
+
+  // Identifica campi mancanti
   const missingFields = [];
   if (schema && schema.fields) {
     schema.fields.forEach(field => {
       if (field.required && !answers[field.id]) {
-        missingFields.push(field.label || field.id);
+        missingFields.push(field.id);
       }
     });
   }
@@ -729,11 +732,22 @@ export function buildDocumentPrompt(documentType, answers, schema) {
     return buildGenericPrompt(documentType, answers, missingFields);
   }
 
-  // Prepara dati formattati per il template
-  const formattedAnswers = formatAnswersForTemplate(answers, schema);
+  // Costruisci il prompt semplificato e preciso
+  let prompt = `Sei un esperto legale che genera contratti italiani perfetti.
 
-  // Costruisci il prompt
-  let prompt = `Sei un notaio esperto in diritto italiano specializzato in ${context.tipo}.
+REGOLE CRITICHE:
+1. USA ESATTAMENTE i dati forniti dall'utente - NON inventare nulla
+2. Se un dato NON è fornito, scrivi: [DA COMPLETARE: nome_campo]
+3. Usa il genere corretto: se sesso=F usa "La Sig.ra", se sesso=M usa "Il Sig."
+4. NON aggiungere valori di default o esempi
+5. Mantieni la struttura legale formale italiana
+
+DATI FORNITI DALL'UTENTE:
+${Object.entries(formattedAnswers).map(([key, value]) => `${key}: ${value || '[NON FORNITO]'}`).join('\n')}
+
+${missingFields.length > 0 ? `\n⚠️ CAMPI MANCANTI (usa [DA COMPLETARE: nome_campo]):\n${missingFields.map(f => `- ${f}`).join('\n')}\n` : ''}
+
+TIPO DOCUMENTO: ${documentType.name}
 
 RIFERIMENTI NORMATIVI:
 ${context.normativa}
@@ -741,33 +755,26 @@ ${context.normativa}
 ARTICOLI DI LEGGE RILEVANTI:
 ${context.articoli.map(a => `- ${a}`).join('\n')}
 
-OBBLIGHI LEGALI:
-${context.obblighi.map(o => `- ${o}`).join('\n')}
-
-DATI FORNITI DALL'UTENTE:
-${JSON.stringify(formattedAnswers, null, 2)}
-
-${missingFields.length > 0 ? `\n⚠️ ATTENZIONE - CAMPI MANCANTI:
-I seguenti campi obbligatori non sono stati compilati: ${missingFields.join(', ')}
-Nel documento generato, inserisci [DA COMPLETARE: nome_campo] per questi campi.\n` : ''}
-
 STRUTTURA DOCUMENTO DA SEGUIRE:
 ${template}
 
-ISTRUZIONI OBBLIGATORIE:
+GENERA IL CONTRATTO:
+- Usa SOLO i dati forniti sopra
+- Per campi mancanti usa [DA COMPLETARE: nome_campo]
+- Rispetta la normativa italiana del Codice Civile
+- Usa articoli di legge appropriati
+- Usa il genere corretto basato sul campo "sesso" (M=Il Sig., F=La Sig.ra)
 
-1. Segui ESATTAMENTE la struttura formale fornita sopra
-2. Sostituisci tutti i placeholder [CAMPO] con i dati forniti dall'utente
-3. Se un dato manca (indicato come [DA COMPLETARE]), inserisci esattamente [DA COMPLETARE: nome_campo]
-4. Aggiungi tutte le clausole standard necessarie per questo tipo di contratto secondo la normativa italiana
-5. Cita esplicitamente gli articoli di legge rilevanti nel testo del documento
-6. Usa linguaggio giuridico formale italiano corretto
-7. Il documento DEVE essere completo e pronto per la firma (minimo 500 parole)
-8. Includi: intestazione formale, premesse, articoli numerati, clausole standard, spazio per firme
-9. Mantieni la formattazione professionale con spaziatura corretta
-10. Non aggiungere commenti o note esplicative, solo il documento legale
+${documentType.id === 'contratto_affitto' ? `CLAUSOLE DA INSERIRE NEL CONTRATTO (se fornite):
+${answers.clausole_animali ? `- Animali domestici: ${answers.clausole_animali === 'si' ? 'consentiti' : answers.clausole_animali === 'no' ? 'vietati' : 'consentiti previo consenso scritto del locatore'}` : ''}
+${answers.clausole_subaffitto ? `- Subaffitto: ${answers.clausole_subaffitto === 'si' ? 'consentito' : answers.clausole_subaffitto === 'no' ? 'vietato' : 'consentito previo consenso scritto del locatore'}` : ''}
+${answers.clausole_modifiche ? `- Modifiche strutturali: ${answers.clausole_modifiche === 'vietate' ? 'vietate' : answers.clausole_modifiche === 'previo_consenso' ? 'consentite solo previo consenso scritto del locatore' : 'consentite solo modifiche non strutturali'}` : ''}
+${answers.clausole_custom ? `- Clausole personalizzate: ${answers.clausole_custom}` : ''}
 
-GENERA IL DOCUMENTO COMPLETO:`;
+IMPORTANTE: Inserisci queste clausole nell'Art. 6 (Obblighi del Locatario) o crea un nuovo Art. 11 dedicato alle clausole speciali.
+` : ''}
+
+Inizia subito con il contratto senza preamble:`;
 
   return prompt;
 }
@@ -791,28 +798,38 @@ function formatAnswersForTemplate(answers, schema) {
 
 // 🔄 Fallback per documenti senza template specifico
 function buildGenericPrompt(documentType, answers, missingFields) {
-  let prompt = `Sei un assistente legale specializzato in documenti italiani.
+  let prompt = `Sei un esperto legale che genera contratti italiani perfetti.
 
-Genera un documento di tipo: ${documentType.name}
+REGOLE CRITICHE:
+1. USA ESATTAMENTE i dati forniti dall'utente - NON inventare nulla
+2. Se un dato NON è fornito, scrivi: [DA COMPLETARE: nome_campo]
+3. Usa il genere corretto: se sesso=F usa "La Sig.ra", se sesso=M usa "Il Sig."
+4. NON aggiungere valori di default o esempi
+5. Mantieni la struttura legale formale italiana
 
-Dati forniti:
-${JSON.stringify(answers, null, 2)}
+DATI FORNITI DALL'UTENTE:
+${Object.entries(answers).map(([key, value]) => `${key}: ${value || '[NON FORNITO]'}`).join('\n')}
 
-${missingFields.length > 0 ? `\n⚠️ ATTENZIONE - CAMPI MANCANTI:
-I seguenti campi obbligatori non sono stati compilati: ${missingFields.join(', ')}
-Nel documento generato, inserisci [DA COMPLETARE: nome_campo] per questi campi.\n` : ''}
+${missingFields.length > 0 ? `\n⚠️ CAMPI MANCANTI (usa [DA COMPLETARE: nome_campo]):\n${missingFields.map(f => `- ${f}`).join('\n')}\n` : ''}
 
-ISTRUZIONI:
-1. Genera un documento legale completo e professionale in italiano
-2. Utilizza tutti i dati forniti per compilare il documento
-3. Segui le norme e le convenzioni legali italiane
-4. Il documento deve essere formattato correttamente e pronto per l'uso
-5. Includi tutte le clausole standard necessarie per questo tipo di documento
-6. Assicurati che il documento sia completo e legalmente valido (minimo 500 parole)
-7. Usa linguaggio giuridico formale italiano
-8. Includi intestazione, premesse, articoli numerati, clausole standard, spazio per firme
+TIPO DOCUMENTO: ${documentType.name}
 
-Genera il documento:`;
+GENERA IL CONTRATTO:
+- Usa SOLO i dati forniti sopra
+- Per campi mancanti usa [DA COMPLETARE: nome_campo]
+- Rispetta la normativa italiana del Codice Civile
+- Usa articoli di legge appropriati
+
+${documentType.id === 'contratto_affitto' ? `CLAUSOLE DA INSERIRE NEL CONTRATTO (se fornite):
+${answers.clausole_animali ? `- Animali domestici: ${answers.clausole_animali === 'si' ? 'consentiti' : answers.clausole_animali === 'no' ? 'vietati' : 'consentiti previo consenso scritto del locatore'}` : ''}
+${answers.clausole_subaffitto ? `- Subaffitto: ${answers.clausole_subaffitto === 'si' ? 'consentito' : answers.clausole_subaffitto === 'no' ? 'vietato' : 'consentito previo consenso scritto del locatore'}` : ''}
+${answers.clausole_modifiche ? `- Modifiche strutturali: ${answers.clausole_modifiche === 'vietate' ? 'vietate' : answers.clausole_modifiche === 'previo_consenso' ? 'consentite solo previo consenso scritto del locatore' : 'consentite solo modifiche non strutturali'}` : ''}
+${answers.clausole_custom ? `- Clausole personalizzate: ${answers.clausole_custom}` : ''}
+
+IMPORTANTE: Inserisci queste clausole nell'Art. 6 (Obblighi del Locatario) o crea un nuovo Art. 11 dedicato alle clausole speciali.
+` : ''}
+
+Inizia subito con il contratto senza preamble:`;
 
   return prompt;
 }

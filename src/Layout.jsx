@@ -21,6 +21,7 @@ import Home from "@/pages/Home";
 import GenerateDocument from "@/pages/GenerateDocument";
 import CompileDocument from "@/pages/CompileDocument";
 import Settings from "@/pages/Settings";
+import ResetPassword from "@/pages/ResetPassword";
 
 export default function Layout() {
   const location = useLocation();
@@ -270,6 +271,7 @@ export default function Layout() {
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/reset-password" element={<ResetPassword />} />
           <Route path="/generate-document" element={<GenerateDocument />} />
           <Route path="/compile-document" element={<CompileDocument />} />
           <Route path="/profile" element={<Profile />} />

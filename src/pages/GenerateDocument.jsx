@@ -270,6 +270,11 @@ export default function GenerateDocument() {
               setSelectedDocumentType(null);
               setGeneratedDocument(null);
             }}
+            onEditData={() => {
+              // Torna al wizard mantenendo i dati
+              setCurrentStage("questionnaire");
+              setGeneratedDocument(null);
+            }}
           />
         )}
       </AnimatePresence>

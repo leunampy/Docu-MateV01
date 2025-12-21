@@ -77,6 +77,7 @@ export default function QuestionnaireForm({
 
   const fields = schema.fields || [];
 
+  // Filtra i campi visibili in base alle dipendenze
   const visibleFields = fields.filter((field) => {
     if (field.dependsOn) {
       return answers[field.dependsOn.field] === field.dependsOn.value;
@@ -91,7 +92,17 @@ export default function QuestionnaireForm({
     return true;
   });
 
-  const currentField = visibleFields[step];
+  // Raggruppa campi per step
+  const fieldsByStep = visibleFields.reduce((acc, field) => {
+    const stepNum = field.step || 1;
+    if (!acc[stepNum]) acc[stepNum] = [];
+    acc[stepNum].push(field);
+    return acc;
+  }, {});
+
+  const stepNumbers = Object.keys(fieldsByStep).map(Number).sort((a, b) => a - b);
+  const currentStepNumber = stepNumbers[step] || stepNumbers[0];
+  const currentStepFields = fieldsByStep[currentStepNumber] || [];
 
   const applyAutoFill = (field, companyId = null) => {
     if (!field) return;
@@ -195,7 +206,7 @@ export default function QuestionnaireForm({
   };
 
   const next = () => {
-    if (step < visibleFields.length - 1) {
+    if (step < stepNumbers.length - 1) {
       setStep((s) => s + 1);
     } else {
       handleGenerate();
@@ -247,14 +258,14 @@ export default function QuestionnaireForm({
           {/* 📊 Progress Bar */}
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-sm text-gray-600">
-              <span>Domanda {step + 1} di {visibleFields.length}</span>
-              <span>{Math.round(((step + 1) / visibleFields.length) * 100)}%</span>
+              <span>Step {step + 1} di {stepNumbers.length}</span>
+              <span>{Math.round(((step + 1) / stepNumbers.length) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
               <motion.div
                 className="bg-gradient-to-r from-indigo-600 to-blue-600 h-2.5 rounded-full"
                 initial={{ width: 0 }}
-                animate={{ width: `${((step + 1) / visibleFields.length) * 100}%` }}
+                animate={{ width: `${((step + 1) / stepNumbers.length) * 100}%` }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
               />
             </div>
@@ -262,10 +273,28 @@ export default function QuestionnaireForm({
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <p className="text-lg font-medium">{currentField?.label}</p>
+          {/* Titolo dello step */}
+          <h3 className="text-xl font-semibold mb-4">
+            {currentStepNumber === 1 && '🏠 Dati Immobile'}
+            {currentStepNumber === 2 && '👤 Dati Locatore'}
+            {currentStepNumber === 3 && '👤 Dati Locatario'}
+            {currentStepNumber === 4 && '📝 Dati Contratto'}
+            {!currentStepNumber && 'Dati'}
+          </h3>
 
-          {currentField && renderField(currentField)}
+          {/* Renderizza TUTTI i campi dello step corrente */}
+          <div className="space-y-4">
+            {currentStepFields.map(field => (
+              <div key={field.id} className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {field.label} {field.required && <span className="text-red-500">*</span>}
+                </label>
+                {renderField(field)}
+              </div>
+            ))}
+          </div>
 
+          {/* Pulsanti navigazione */}
           <div className="flex justify-between mt-6 gap-3">
             <Button 
               variant="outline" 
@@ -285,7 +314,7 @@ export default function QuestionnaireForm({
                   <Loader2 className="animate-spin mr-2" />
                   Generazione...
                 </>
-              ) : step < visibleFields.length - 1 ? (
+              ) : step < stepNumbers.length - 1 ? (
                 "Avanti"
               ) : (
                 "Genera Documento"
