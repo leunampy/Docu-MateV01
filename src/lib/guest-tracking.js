@@ -1,93 +1,79 @@
-// src/lib/guest-tracking.js
-import { supabase } from '@/api/supabaseClient';
+// Simple localStorage-based tracking for guest and authenticated users.
+const STORAGE_KEY = "guestGenerationTracking";
+const MONTHLY_LIMIT = 5;
 
-const GUEST_ID_KEY = 'documate_guest_id';
-const MONTHLY_LIMIT_GUEST = 5;
-const MONTHLY_LIMIT_USER = 10;
-
-// Genera un ID guest univoco
-const generateGuestId = () => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 15);
-  return `guest_${timestamp}_${random}`;
-};
-
-// Ottieni o crea guest ID
-export const getGuestId = () => {
-  let guestId = localStorage.getItem(GUEST_ID_KEY);
-  if (!guestId) {
-    guestId = generateGuestId();
-    localStorage.setItem(GUEST_ID_KEY, guestId);
+const safeParse = (value) => {
+  if (!value) return {};
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
   }
-  return guestId;
 };
 
-// Controlla quanti documenti ha generato questo mese
-export const checkMonthlyLimit = async (userId = null) => {
-  const isGuest = !userId;
-  const identifier = isGuest ? getGuestId() : userId;
-  const limit = isGuest ? MONTHLY_LIMIT_GUEST : MONTHLY_LIMIT_USER;
+const getStore = () => {
+  if (typeof window === "undefined") return {};
+  return safeParse(window.localStorage.getItem(STORAGE_KEY));
+};
 
-  // Data di inizio mese corrente
+const saveStore = (data) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+};
+
+const currentMonth = () => {
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  try {
-    const { data, error } = await supabase
-      .from('document_generations')
-      .select('id', { count: 'exact' })
-      .eq(isGuest ? 'guest_id' : 'user_id', identifier)
-      .gte('created_at', startOfMonth.toISOString());
-
-    if (error) throw error;
-
-    const count = data?.length || 0;
-    const remaining = Math.max(0, limit - count);
-
-    return {
-      success: true,
-      count,
-      limit,
-      remaining,
-      canGenerate: count < limit,
-      isGuest,
-    };
-  } catch (error) {
-    console.error('Errore controllo limite:', error);
-    return { success: false, error: error.message };
-  }
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
-// Registra una generazione documento
-export const trackGeneration = async (documentType, userId = null) => {
-  const isGuest = !userId;
-  const identifier = isGuest ? getGuestId() : userId;
-
-  console.log('🔵 trackGeneration chiamato:', { documentType, userId, isGuest, identifier });
-
-  try {
-    const insertData = {
-      [isGuest ? 'guest_id' : 'user_id']: identifier,
-      document_type: documentType,
-      created_at: new Date().toISOString(),
-    };
-    
-    console.log('🔵 Dati da inserire:', insertData);
-
-    const { data, error } = await supabase
-      .from('document_generations')
-      .insert(insertData)
-      .select();
-
-    if (error) {
-      console.error('❌ Errore Supabase:', error);
-      throw error;
-    }
-    
-    console.log('✅ Record inserito:', data);
-    return { success: true, data };
-  } catch (error) {
-    console.error('❌ Errore tracking:', error);
-    return { success: false, error: error.message };
-  }
+export const getGuestId = () => {
+  if (typeof window === "undefined") return "guest-server";
+  const existing = window.localStorage.getItem("guestId");
+  if (existing) return existing;
+  const newId =
+    (window.crypto?.randomUUID && window.crypto.randomUUID()) ||
+    `guest-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  window.localStorage.setItem("guestId", newId);
+  return newId;
 };
+
+export const checkMonthlyLimit = (userId) => {
+  const id = userId || getGuestId();
+  const store = getStore();
+  const month = currentMonth();
+  const userMonth = store[id]?.[month] || { count: 0 };
+  const remaining = Math.max(MONTHLY_LIMIT - userMonth.count, 0);
+
+  return {
+    success: true,
+    limit: MONTHLY_LIMIT,
+    used: userMonth.count,
+    remaining,
+    canGenerate: remaining > 0,
+  };
+};
+
+export const trackGeneration = (documentType, userId) => {
+  const id = userId || getGuestId();
+  const store = getStore();
+  const month = currentMonth();
+
+  if (!store[id]) store[id] = {};
+  if (!store[id][month]) store[id][month] = { count: 0, history: [] };
+
+  store[id][month].count += 1;
+  store[id][month].history.push({
+    documentType,
+    timestamp: new Date().toISOString(),
+  });
+
+  saveStore(store);
+
+  return {
+    success: true,
+    limit: MONTHLY_LIMIT,
+    used: store[id][month].count,
+    remaining: Math.max(MONTHLY_LIMIT - store[id][month].count, 0),
+  };
+};
+

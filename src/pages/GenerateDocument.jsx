@@ -7,9 +7,9 @@ import { ArrowLeft, ArrowRight, Home, Download, Loader2, CheckCircle, FileText }
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { checkMonthlyLimit, trackGeneration, getGuestId } from "@/lib/guest-tracking";
-import { useAuth } from "@/lib/AuthContext";
-import { supabase } from "@/api/supabaseClient";
+import { checkMonthlyLimit, trackGeneration, getGuestId } from "../lib/guest-tracking";
+import { useAuth } from "../lib/AuthContext";
+import { supabase } from "../api/supabaseClient";
 
 import CategorySelection from "../components/document-generator/CategorySelection";
 import DocumentTypeSelection from "../components/document-generator/DocumentTypeSelection";

@@ -2,14 +2,12 @@ import React from "react";
 import { Routes, Route } from "react-router-dom";
 import Layout from "./Layout";
 import AuthPage from "@/pages/AuthPage";
-import ForgotPassword from "@/pages/ForgotPassword";
 
 export default function App() {
   return (
     <Routes>
       {/* 🔹 Pagina di login/registrazione (fuori dal layout) */}
       <Route path="/auth" element={<AuthPage />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
 
       {/* 🔹 Tutte le altre pagine dentro il layout */}
       <Route path="/*" element={<Layout />} />

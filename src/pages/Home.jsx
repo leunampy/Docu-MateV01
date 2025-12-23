@@ -6,7 +6,6 @@ import { base44 } from "@/api/base44Client";
 import { FileText, FileSignature, ArrowRight, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -126,31 +125,21 @@ export default function Home() {
               exit={{ opacity: 0, x: 100 }}
               transition={{ duration: 0.5, ease: "easeInOut" }}
               className={selectedBox === "generate" ? "hidden" : ""}
-              onClick={(e) => e.preventDefault()}
-              onMouseDown={(e) => e.preventDefault()}
             >
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="w-full">
-                      {/* @ts-ignore */}
-                      <Card
-                        className="group relative overflow-hidden cursor-not-allowed border-2 border-transparent opacity-50 bg-white h-[520px] flex flex-col"
-                        disabled={true}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                      >
-                        {/* @ts-ignore */}
-                        <CardContent className="relative flex-1 p-8 flex flex-col">
+              {/* @ts-ignore */}
+              <Card
+                onClick={(e) => e.preventDefault()}
+                className="group relative overflow-hidden cursor-not-allowed opacity-60 border-2 border-transparent hover:border-blue-300 transition-all duration-300 bg-white h-[520px] flex flex-col"
+              >
+                {/* @ts-ignore */}
+                <CardContent className="relative flex-1 p-8 flex flex-col">
                   {/* Background & Glow */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-cyan-500/10 to-teal-500/10 opacity-0" />
-                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-cyan-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500" />
 
                   {/* Icon */}
                   <div className="mb-6">
-                    <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center">
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                       <FileSignature className="w-10 h-10 text-white" />
                     </div>
                   </div>
@@ -185,17 +174,10 @@ export default function Home() {
                     <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 border-yellow-200">
                       🚧 In sviluppo
                     </Badge>
-                    <ArrowRight className="w-6 h-6 text-blue-600" />
+                    <ArrowRight className="w-6 h-6 text-blue-600 transform group-hover:translate-x-2 transition-transform" />
                   </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Funzione in sviluppo - Coming Soon</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                </CardContent>
+              </Card>
             </motion.div>
           </AnimatePresence>
         </div>

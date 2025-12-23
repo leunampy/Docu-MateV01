@@ -3,43 +3,22 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Download, Home, CheckCircle } from "lucide-react";
+import { Download, Home, CheckCircle, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { Document, Paragraph, TextRun, Packer } from "docx";
 
-export default function DocumentResult({ document: generatedDoc, user, onHome, onNewDocument, onEditData }) {
-  const downloadDocument = async () => {
+export default function DocumentResult({ document: generatedDoc, user, onHome, onNewDocument }) {
+  const downloadDocument = () => {
     if (!generatedDoc) return;
 
-    try {
-      // Crea documento DOCX
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: generatedDoc.text.split('\n').map(line => 
-            new Paragraph({
-              children: [new TextRun(line)],
-            })
-          ),
-        }],
-      });
-
-      // Genera blob
-      const blob = await Packer.toBlob(doc);
-      
-      // Download
-      const url = window.URL.createObjectURL(blob);
-      const a = window.document.createElement("a");
-      a.href = url;
-      a.download = `${generatedDoc.document_type}_${new Date().getTime()}.docx`;
-      window.document.body.appendChild(a);
-      a.click();
-      window.document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Errore download:', error);
-      alert('Errore durante il download del documento');
-    }
+    const blob = new Blob([generatedDoc.text], { type: "text/plain" });
+    const url = window.URL.createObjectURL(blob);
+    const a = window.document.createElement("a");
+    a.href = url;
+    a.download = `${generatedDoc.document_type}_${new Date().getTime()}.txt`;
+    window.document.body.appendChild(a);
+    a.click();
+    window.document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -69,32 +48,29 @@ export default function DocumentResult({ document: generatedDoc, user, onHome, o
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Button
             onClick={downloadDocument}
-            className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
+            className="flex-1 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700"
           >
             <Download className="w-5 h-5 mr-2" />
-            Scarica DOCX
+            Scarica Documento
           </Button>
-          
-          <div className="flex gap-4">
-            <Button
-              onClick={onEditData}
-              variant="outline"
-              className="flex-1"
-            >
-              🔧 Correggi Dati
-            </Button>
-            <Button
-              onClick={onHome}
-              variant="outline"
-              className="flex-1"
-            >
-              <Home className="w-5 h-5 mr-2" />
-              Home
-            </Button>
-          </div>
+          <Button
+            onClick={onNewDocument}
+            variant="outline"
+            className="flex-1"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Genera Altro Documento
+          </Button>
+          <Button
+            onClick={onHome}
+            variant="outline"
+          >
+            <Home className="w-5 h-5 mr-2" />
+            Home
+          </Button>
         </div>
 
         {/* User Limit Alert */}

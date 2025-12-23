@@ -21,7 +21,6 @@ import Home from "@/pages/Home";
 import GenerateDocument from "@/pages/GenerateDocument";
 import CompileDocument from "@/pages/CompileDocument";
 import Settings from "@/pages/Settings";
-import ResetPassword from "@/pages/ResetPassword";
 
 export default function Layout() {
   const location = useLocation();
@@ -175,7 +174,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <header className="fixed left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200/50 top-0">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200/50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3 group">
@@ -271,7 +270,6 @@ export default function Layout() {
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/auth/reset-password" element={<ResetPassword />} />
           <Route path="/generate-document" element={<GenerateDocument />} />
           <Route path="/compile-document" element={<CompileDocument />} />
           <Route path="/profile" element={<Profile />} />

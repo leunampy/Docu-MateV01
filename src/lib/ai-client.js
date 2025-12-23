@@ -4,7 +4,7 @@
 const CONFIG = {
   cerebrasUrl: 'https://api.cerebras.ai/v1/chat/completions',
   apiKey: import.meta.env.VITE_CEREBRAS_API_KEY,
-  model: 'llama-3.3-70b',
+  model: 'llama3.1-70b',
   maxTokens: 8000,
   temperature: 0.3,
 };
