@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -37,13 +37,20 @@ export default function ResetPassword() {
         password: password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Controlla se l'errore è per password già usata
+        if (error.message.includes('same as the old password') || 
+            error.message.includes('already been used')) {
+          throw new Error('Questa password è già stata utilizzata. Scegline una diversa.');
+        }
+        throw error;
+      }
 
       setSuccess(true);
       
-      // Redirect alla home dopo 2 secondi
+      // Redirect al LOGIN dopo 2 secondi (non alla home)
       setTimeout(() => {
-        navigate('/');
+        navigate('/auth');
       }, 2000);
     } catch (err) {
       setError(err.message || 'Errore durante il reset della password');
@@ -85,8 +92,7 @@ export default function ResetPassword() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nuova Password
                 </label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Almeno 6 caratteri"
@@ -100,8 +106,7 @@ export default function ResetPassword() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Conferma Password
                 </label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Ripeti la password"

@@ -1,6 +1,7 @@
 // Simple localStorage-based tracking for guest and authenticated users.
 const STORAGE_KEY = "guestGenerationTracking";
-const MONTHLY_LIMIT = 5;
+const MONTHLY_LIMIT_GUEST = 5;  // 5 documenti per guest
+const MONTHLY_LIMIT_USER = 10;  // 10 documenti per utenti registrati
 
 const safeParse = (value) => {
   if (!value) return {};
@@ -37,23 +38,27 @@ export const getGuestId = () => {
   return newId;
 };
 
-export const checkMonthlyLimit = (userId) => {
+export const checkMonthlyLimit = async (userId = null) => {
+  const isGuest = !userId;
+  const limit = isGuest ? MONTHLY_LIMIT_GUEST : MONTHLY_LIMIT_USER;
   const id = userId || getGuestId();
   const store = getStore();
   const month = currentMonth();
   const userMonth = store[id]?.[month] || { count: 0 };
-  const remaining = Math.max(MONTHLY_LIMIT - userMonth.count, 0);
+  const count = userMonth.count;
+  const remaining = Math.max(0, limit - count);
 
   return {
-    success: true,
-    limit: MONTHLY_LIMIT,
-    used: userMonth.count,
+    allowed: count < limit,
     remaining,
-    canGenerate: remaining > 0,
+    total: limit,
+    isGuest
   };
 };
 
 export const trackGeneration = (documentType, userId) => {
+  const isGuest = !userId;
+  const limit = isGuest ? MONTHLY_LIMIT_GUEST : MONTHLY_LIMIT_USER;
   const id = userId || getGuestId();
   const store = getStore();
   const month = currentMonth();
@@ -71,9 +76,9 @@ export const trackGeneration = (documentType, userId) => {
 
   return {
     success: true,
-    limit: MONTHLY_LIMIT,
+    limit,
     used: store[id][month].count,
-    remaining: Math.max(MONTHLY_LIMIT - store[id][month].count, 0),
+    remaining: Math.max(0, limit - store[id][month].count),
   };
 };
 

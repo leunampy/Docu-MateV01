@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -74,13 +75,12 @@ export default function AuthPage() {
             required
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
           />
-          <input
-            type="password"
+          <PasswordInput
             placeholder="Password (min 6 caratteri)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+            className="w-full"
           />
 
           {isLogin && (

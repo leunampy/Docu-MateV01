@@ -58,7 +58,7 @@ export default function GenerateDocument() {
     // Controlla limite prima di permettere l'accesso al form
     const limitCheck = await checkMonthlyLimit(user?.id);
     setLimitInfo(limitCheck);
-    if (!limitCheck.canGenerate) {
+    if (!limitCheck.allowed) {
       return;
     }
     
@@ -70,7 +70,7 @@ export default function GenerateDocument() {
     // Controlla limite prima di procedere
     const limitCheck = await checkMonthlyLimit(user?.id);
     setLimitInfo(limitCheck);
-    if (!limitCheck.canGenerate) {
+    if (!limitCheck.allowed) {
       return;
     }
 
@@ -115,11 +115,11 @@ export default function GenerateDocument() {
       )}
 
       {/* Contatore documenti rimanenti */}
-      {limitInfo && limitInfo.success && (
+      {limitInfo && (
         <div className="max-w-4xl mx-auto mb-4">
           <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-blue-900">
-              📄 Documenti rimanenti questo mese: <strong>{limitInfo.remaining}/{limitInfo.limit}</strong>
+              📄 Documenti rimanenti questo mese: <strong>{limitInfo.remaining}/{limitInfo.total}</strong>
               {limitInfo.isGuest && ' (Registrati per avere 10 documenti/mese!)'}
             </p>
           </div>
@@ -220,7 +220,7 @@ export default function GenerateDocument() {
       )}
 
       {/* Alert limite raggiunto */}
-      {limitInfo && !limitInfo.canGenerate && (
+      {limitInfo && !limitInfo.allowed && (
         <div className="max-w-4xl mx-auto mb-4">
           <div className="p-4 bg-red-50 rounded-lg border border-red-200">
             <p className="text-sm text-red-900">
