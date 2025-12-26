@@ -77,3 +77,4 @@ export const trackGeneration = (documentType, userId) => {
   };
 };
 
+

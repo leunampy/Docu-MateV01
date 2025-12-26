@@ -14,7 +14,7 @@ export default function ResetPassword() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth`,
+        redirectTo: 'https://www.documate.it/auth/reset-password',
       });
       if (error) throw error;
       setStatus({
@@ -84,4 +84,5 @@ export default function ResetPassword() {
     </div>
   );
 }
+
 
