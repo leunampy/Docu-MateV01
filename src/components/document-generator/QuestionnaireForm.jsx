@@ -29,9 +29,9 @@ export default function QuestionnaireForm({
 
   const [loading, setLoading] = useState(false);
 
-  // Stato per ogni singolo campo:
-  // { campo_id: { useSaved: boolean, selectedCompanyId: string | null } }
-  const [fieldPrefill, setFieldPrefill] = useState({});
+  // Stato per lo step corrente: toggle e azienda selezionata
+  const [useProfileForStep, setUseProfileForStep] = useState(false);
+  const [selectedCompanyForStep, setSelectedCompanyForStep] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -99,41 +99,42 @@ export default function QuestionnaireForm({
     ? Math.max(...visibleFields.map(f => f.step || 1))
     : 1;
 
-  const applyAutoFill = (field, companyId = null) => {
-    if (!field) return;
+  // Verifica se lo step ha campi mappabili
+  const stepHasPersonalFields = currentStepFields.some(f => f.mapsToPersonal);
+  const stepHasCompanyFields = currentStepFields.some(f => f.mapsToCompany);
 
-    // Azienda
-    if (companyId && field.mapsToCompany) {
-      const company = companies.find((c) => c.id === companyId);
-      if (company && company[field.mapsToCompany]) {
-        setAnswers((prev) => ({
-          ...prev,
-          [field.id]: company[field.mapsToCompany],
-        }));
-      }
-      return;
-    }
+  // Reset dello stato quando cambia lo step
+  useEffect(() => {
+    setUseProfileForStep(false);
+    setSelectedCompanyForStep(null);
+  }, [currentStep]);
 
-    // Profilo personale
-    if (!companyId && field.mapsToPersonal && personalProfile) {
-      if (personalProfile[field.mapsToPersonal]) {
-        setAnswers((prev) => ({
-          ...prev,
-          [field.id]: personalProfile[field.mapsToPersonal],
-        }));
+  // Funzione per autofillare tutti i campi dello step
+  const autofillStepFields = (companyId = null) => {
+    currentStepFields.forEach(field => {
+      if (companyId && field.mapsToCompany) {
+        const company = companies.find(c => c.id === companyId);
+        if (company && company[field.mapsToCompany]) {
+          setAnswers(prev => ({ 
+            ...prev, 
+            [field.id]: company[field.mapsToCompany] 
+          }));
+        }
+      } else if (!companyId && field.mapsToPersonal && personalProfile) {
+        if (personalProfile[field.mapsToPersonal]) {
+          setAnswers(prev => ({ 
+            ...prev, 
+            [field.id]: personalProfile[field.mapsToPersonal] 
+          }));
+        }
       }
-    }
+    });
   };
 
   const renderField = (field) => {
-    const settings = fieldPrefill[field.id] || {
-      useSaved: false,
-      companyId: null,
-    };
-
+    // Solo il campo input, senza toggle individuale
     return (
       <>
-        {/* Campo principale */}
         {field.type === "choice" ? (
           <select
             className="w-full border rounded-lg px-3 py-2"
@@ -156,44 +157,6 @@ export default function QuestionnaireForm({
             onChange={(e) =>
               setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
             }
-          />
-        )}
-
-        {/* Toggle “usa dati salvati” */}
-        {(field.mapsToCompany || field.mapsToPersonal) && (
-          <UseSavedDataBox
-            enabled={settings.useSaved}
-            onToggle={(value) => {
-              setFieldPrefill((prev) => ({
-                ...prev,
-                [field.id]: { ...settings, useSaved: value },
-              }));
-
-              if (!value) return; // disattivato
-
-              if (field.mapsToCompany) {
-                // Non autofill finché non seleziona azienda
-                return;
-              }
-
-              // Personale
-              applyAutoFill(field, null);
-            }}
-          />
-        )}
-
-        {/* Se vuole usare un profilo aziendale: mostra select */}
-        {settings.useSaved && field.mapsToCompany && (
-          <CompanySelector
-            companies={companies}
-            selected={settings.companyId}
-            onChange={(companyId) => {
-              setFieldPrefill((prev) => ({
-                ...prev,
-                [field.id]: { ...settings, companyId },
-              }));
-              applyAutoFill(field, companyId);
-            }}
           />
         )}
       </>
@@ -268,6 +231,46 @@ export default function QuestionnaireForm({
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Toggle "Usa dati salvati" - mostrato una volta per step */}
+          {(stepHasPersonalFields || stepHasCompanyFields) && (
+            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <UseSavedDataBox
+                enabled={useProfileForStep}
+                onToggle={(value) => {
+                  setUseProfileForStep(value);
+                  if (value) {
+                    if (stepHasCompanyFields) {
+                      // Aspetta selezione azienda se ci sono campi aziendali
+                      // Se ci sono solo campi personali, autofilla subito
+                      if (!stepHasPersonalFields) {
+                        // Solo campi aziendali, aspetta selezione
+                      } else {
+                        // Ci sono anche campi personali, autofilla quelli
+                        autofillStepFields();
+                      }
+                    } else {
+                      // Solo campi personali, autofilla subito
+                      autofillStepFields();
+                    }
+                  }
+                }}
+              />
+              
+              {useProfileForStep && stepHasCompanyFields && (
+                <div className="mt-4">
+                  <CompanySelector
+                    companies={companies}
+                    selected={selectedCompanyForStep}
+                    onChange={(companyId) => {
+                      setSelectedCompanyForStep(companyId);
+                      autofillStepFields(companyId);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Renderizza tutti i campi dello step corrente */}
           {currentStepFields.length > 0 ? (
             <div className="space-y-4">
