@@ -4,11 +4,78 @@ export const DOCUMENT_SCHEMAS = {
   // 🏢 1. Contratto di Affitto / Locazione
   contratto_affitto: {
     fields: [
+      // STEP 1 - Dati Immobile
+      {
+        id: "immobile_indirizzo",
+        label: "Indirizzo dell'immobile",
+        type: "text",
+        required: true,
+        step: 1,
+      },
+      {
+        id: "immobile_citta",
+        label: "Città dell'immobile",
+        type: "text",
+        required: true,
+        step: 1,
+      },
+      {
+        id: "immobile_provincia",
+        label: "Provincia dell'immobile",
+        type: "text",
+        required: true,
+        step: 1,
+      },
+      {
+        id: "immobile_cap",
+        label: "CAP dell'immobile",
+        type: "text",
+        required: true,
+        step: 1,
+      },
+      {
+        id: "tipo_uso",
+        label: "Tipo di uso dell'immobile",
+        type: "choice",
+        required: true,
+        step: 1,
+        options: [
+          { value: "civile", label: "Uso civile/abitativo" },
+          { value: "commerciale", label: "Uso commerciale" },
+          { value: "industriale", label: "Uso industriale" },
+          { value: "uffici", label: "Uffici" },
+        ],
+      },
+      // STEP 2 - Dati Locatore
+      {
+        id: "locatore_tipo",
+        label: "Il locatore è una persona fisica o giuridica?",
+        type: "choice",
+        required: true,
+        step: 2,
+        options: [
+          { value: "persona_fisica", label: "Persona Fisica" },
+          { value: "persona_giuridica", label: "Persona Giuridica" },
+        ],
+      },
+      {
+        id: "locatore_sesso",
+        label: "Sesso del Locatore",
+        type: "choice",
+        required: false,
+        step: 2,
+        dependsOn: { field: "locatore_tipo", value: "persona_fisica" },
+        options: [
+          { value: "M", label: "Maschio" },
+          { value: "F", label: "Femmina" },
+        ],
+      },
       {
         id: "locatore_nome",
         label: "Nome / Ragione Sociale del Locatore",
         type: "text",
         required: true,
+        step: 2,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
@@ -19,16 +86,56 @@ export const DOCUMENT_SCHEMAS = {
         label: "Codice Fiscale / Partita IVA del Locatore",
         type: "text",
         required: true,
+        step: 2,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "codice_fiscale",
         mapsToPersonal: "codice_fiscale",
       },
       {
+        id: "locatore_indirizzo",
+        label: "Indirizzo del Locatore",
+        type: "text",
+        required: false,
+        step: 2,
+      },
+      {
+        id: "locatore_citta",
+        label: "Città del Locatore",
+        type: "text",
+        required: false,
+        step: 2,
+      },
+      // STEP 3 - Dati Locatario
+      {
+        id: "locatario_tipo",
+        label: "Il locatario è una persona fisica o giuridica?",
+        type: "choice",
+        required: true,
+        step: 3,
+        options: [
+          { value: "persona_fisica", label: "Persona Fisica" },
+          { value: "persona_giuridica", label: "Persona Giuridica" },
+        ],
+      },
+      {
+        id: "locatario_sesso",
+        label: "Sesso del Locatario",
+        type: "choice",
+        required: false,
+        step: 3,
+        dependsOn: { field: "locatario_tipo", value: "persona_fisica" },
+        options: [
+          { value: "M", label: "Maschio" },
+          { value: "F", label: "Femmina" },
+        ],
+      },
+      {
         id: "locatario_nome",
         label: "Nome / Ragione Sociale del Locatario",
         type: "text",
         required: true,
+        step: 3,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
@@ -39,66 +146,61 @@ export const DOCUMENT_SCHEMAS = {
         label: "Codice Fiscale / Partita IVA del Locatario",
         type: "text",
         required: true,
+        step: 3,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "codice_fiscale",
         mapsToPersonal: "codice_fiscale",
       },
       {
-        id: "immobile_indirizzo",
-        label: "Indirizzo dell'immobile",
+        id: "locatario_indirizzo",
+        label: "Indirizzo del Locatario",
         type: "text",
-        required: true,
+        required: false,
+        step: 3,
       },
       {
-        id: "immobile_citta",
-        label: "Città dell'immobile",
+        id: "locatario_citta",
+        label: "Città del Locatario",
         type: "text",
-        required: true,
+        required: false,
+        step: 3,
       },
-      {
-        id: "immobile_provincia",
-        label: "Provincia dell'immobile",
-        type: "text",
-        required: true,
-      },
-
-      {
-        id: "immobile_cap",
-        label: "CAP dell'immobile",
-        type: "text",
-        required: true,
-      },
+      // STEP 4 - Dati Contratto
       {
         id: "canone_importo",
         label: "Importo del canone mensile",
         type: "number",
         required: true,
-
+        step: 4,
       },
       {
         id: "canone_valuta",
         label: "Valuta del canone",
         type: "text",
         required: false,
+        step: 4,
       },
       {
         id: "durata_mesi",
         label: "Durata del contratto (mesi)",
         type: "number",
         required: true,
+        step: 4,
       },
       {
         id: "data_inizio",
         label: "Data di inizio del contratto",
         type: "date",
         required: true,
+        step: 4,
       },
       {
         id: "uso_azienda",
         label: "L'immobile è destinato ad uso aziendale?",
         type: "choice",
         required: false,
+        step: 4,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -923,5 +1025,6 @@ export const DOCUMENT_SCHEMAS = {
     ],
   },
 };
+
 
 

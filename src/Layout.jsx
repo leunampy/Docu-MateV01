@@ -21,6 +21,7 @@ import Home from "@/pages/Home";
 import GenerateDocument from "@/pages/GenerateDocument";
 import CompileDocument from "@/pages/CompileDocument";
 import Settings from "@/pages/Settings";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 
 export default function Layout() {
   const location = useLocation();
@@ -274,8 +275,19 @@ export default function Layout() {
           <Route path="/compile-document" element={<CompileDocument />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
         </Routes>
       </main>
+
+      <footer className="border-t border-gray-200 bg-white/50 backdrop-blur-sm mt-12">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-center gap-4 text-sm text-gray-600">
+            <Link to="/privacy" className="hover:text-indigo-600 hover:underline transition-colors">
+              Privacy Policy
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -22,7 +22,7 @@ export default function QuestionnaireForm({
 }) {
   const schema = DOCUMENT_SCHEMAS[documentType.id];
 
-  const [step, setStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(1);
   const [answers, setAnswers] = useState({});
   const [personalProfile, setPersonalProfile] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -91,7 +91,13 @@ export default function QuestionnaireForm({
     return true;
   });
 
-  const currentField = visibleFields[step];
+  // Filtra i campi dello step corrente
+  const currentStepFields = visibleFields.filter(field => (field.step || 1) === currentStep);
+  
+  // Calcola il numero totale di step
+  const totalSteps = visibleFields.length > 0 
+    ? Math.max(...visibleFields.map(f => f.step || 1))
+    : 1;
 
   const applyAutoFill = (field, companyId = null) => {
     if (!field) return;
@@ -195,16 +201,16 @@ export default function QuestionnaireForm({
   };
 
   const next = () => {
-    if (step < visibleFields.length - 1) {
-      setStep((s) => s + 1);
+    if (currentStep < totalSteps) {
+      setCurrentStep((s) => s + 1);
     } else {
       handleGenerate();
     }
   };
 
   const prev = () => {
-    if (step > 0) {
-      setStep((s) => s - 1);
+    if (currentStep > 1) {
+      setCurrentStep((s) => s - 1);
     }
   };
 
@@ -247,14 +253,14 @@ export default function QuestionnaireForm({
           {/* 📊 Progress Bar */}
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-sm text-gray-600">
-              <span>Domanda {step + 1} di {visibleFields.length}</span>
-              <span>{Math.round(((step + 1) / visibleFields.length) * 100)}%</span>
+              <span>Step {currentStep} di {totalSteps}</span>
+              <span>{Math.round((currentStep / totalSteps) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
               <motion.div
                 className="bg-gradient-to-r from-indigo-600 to-blue-600 h-2.5 rounded-full"
                 initial={{ width: 0 }}
-                animate={{ width: `${((step + 1) / visibleFields.length) * 100}%` }}
+                animate={{ width: `${(currentStep / totalSteps) * 100}%` }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
               />
             </div>
@@ -262,17 +268,30 @@ export default function QuestionnaireForm({
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <p className="text-lg font-medium">{currentField?.label}</p>
-
-          {currentField && renderField(currentField)}
+          {/* Renderizza tutti i campi dello step corrente */}
+          {currentStepFields.length > 0 ? (
+            <div className="space-y-4">
+              {currentStepFields.map((field) => (
+                <div key={field.id} className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  {renderField(field)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">Nessun campo disponibile per questo step.</p>
+          )}
 
           <div className="flex justify-between mt-6 gap-3">
             <Button 
               variant="outline" 
-              onClick={step === 0 ? onBack : prev}
+              onClick={currentStep === 1 ? onBack : prev}
               disabled={loading}
             >
-              {step === 0 ? "Indietro" : "Precedente"}
+              {currentStep === 1 ? "Indietro" : "Precedente"}
             </Button>
 
             <Button 
@@ -285,7 +304,7 @@ export default function QuestionnaireForm({
                   <Loader2 className="animate-spin mr-2" />
                   Generazione...
                 </>
-              ) : step < visibleFields.length - 1 ? (
+              ) : currentStep < totalSteps ? (
                 "Avanti"
               ) : (
                 "Genera Documento"
