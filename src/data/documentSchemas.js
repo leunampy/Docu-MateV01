@@ -212,11 +212,13 @@ export const DOCUMENT_SCHEMAS = {
   // 💸 2. Contratto di Prestito tra Privati
   prestito_privati: {
     fields: [
+      // STEP 1 - Prestatore
       {
         id: "prestatore_nome",
         label: "Nome completo del Prestatore",
         type: "text",
         required: true,
+        step: 1,
         usePersonal: true,
         mapsToPersonal: "nome",
       },
@@ -225,38 +227,46 @@ export const DOCUMENT_SCHEMAS = {
         label: "Codice Fiscale del Prestatore",
         type: "text",
         required: true,
+        step: 1,
         usePersonal: true,
         mapsToPersonal: "codice_fiscale",
       },
+      // STEP 2 - Beneficiario
       {
         id: "beneficiario_nome",
         label: "Nome completo del Beneficiario",
         type: "text",
         required: true,
+        step: 2,
       },
       {
         id: "beneficiario_codice_fiscale",
         label: "Codice Fiscale del Beneficiario",
         type: "text",
         required: true,
+        step: 2,
       },
+      // STEP 3 - Dati Contratto
       {
         id: "importo",
         label: "Importo del prestito",
         type: "number",
         required: true,
+        step: 3,
       },
       {
         id: "valuta",
         label: "Valuta",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "tasso_interesse_choice",
         label: "Il prestito prevede un tasso di interesse?",
         type: "choice",
         required: true,
+        step: 3,
         options: [
           { value: "nessuno", label: "Nessuno" },
           { value: "fisso", label: "Fisso" },
@@ -267,6 +277,7 @@ export const DOCUMENT_SCHEMAS = {
         label: "Tasso di interesse annuo (%)",
         type: "number",
         required: false,
+        step: 3,
         dependsOn: { field: "tasso_interesse_choice", value: "fisso" },
       },
       {
@@ -274,60 +285,70 @@ export const DOCUMENT_SCHEMAS = {
         label: "Data di erogazione del prestito",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "data_restituzione",
         label: "Data prevista per la restituzione",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "modalita_restituzione",
         label: "Modalità di restituzione (es. unica soluzione, rateale)",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "metodo_pagamento",
         label: "Metodo di pagamento",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "garanzie",
         label: "Garanzie previste (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "clausola_risoluzione",
         label: "Clausola di risoluzione anticipata (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_stipula",
         label: "Luogo di stipula del contratto",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "data_stipula",
         label: "Data di stipula del contratto",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "firma_prestatore",
         label: "Firma del Prestatore",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_beneficiario",
         label: "Firma del Beneficiario",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -335,45 +356,54 @@ export const DOCUMENT_SCHEMAS = {
   // 🛒 3. Contratto di Vendita Privata
   vendita_privata: {
     fields: [
+      // STEP 1 - Venditore
       {
         id: "venditore_nome",
         label: "Nome / Ragione Sociale del Venditore",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
         mapsToPersonal: "nome",
       },
+      // STEP 2 - Compratore
       {
         id: "compratore_nome",
         label: "Nome / Ragione Sociale del Compratore",
         type: "text",
         required: true,
+        step: 2,
       },
+      // STEP 3 - Dati Contratto
       {
         id: "descrizione_bene",
         label: "Descrizione dettagliata del bene venduto",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "prezzo",
         label: "Prezzo di vendita",
         type: "number",
         required: true,
+        step: 3,
       },
       {
         id: "valuta",
         label: "Valuta",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "acconto_choice",
         label: "È previsto un acconto?",
         type: "choice",
         required: true,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -384,6 +414,7 @@ export const DOCUMENT_SCHEMAS = {
         label: "Importo dell'acconto",
         type: "number",
         required: false,
+        step: 3,
         dependsOn: { field: "acconto_choice", value: "si" },
       },
       {
@@ -391,18 +422,21 @@ export const DOCUMENT_SCHEMAS = {
         label: "Modalità di pagamento",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "data_consegna",
         label: "Data prevista per la consegna",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "visto_piaciuto_choice",
         label: "Clausola 'visto e piaciuto'",
         type: "choice",
         required: false,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -413,6 +447,7 @@ export const DOCUMENT_SCHEMAS = {
         label: "È prevista una garanzia?",
         type: "choice",
         required: false,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -423,24 +458,28 @@ export const DOCUMENT_SCHEMAS = {
         label: "Clausola di recesso (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_data_stipula",
         label: "Luogo e data di stipula",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_venditore",
         label: "Firma del Venditore",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_compratore",
         label: "Firma del Compratore",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -448,51 +487,61 @@ export const DOCUMENT_SCHEMAS = {
   // 📦 4. Contratto di Fornitura / Servizi
   fornitura_servizi: {
     fields: [
+      // STEP 1 - Fornitore
       {
         id: "fornitore_nome",
         label: "Nome / Ragione Sociale del Fornitore",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
         mapsToPersonal: "nome",
       },
+      // STEP 2 - Cliente
       {
         id: "cliente_nome",
         label: "Nome / Ragione Sociale del Cliente",
         type: "text",
         required: true,
+        step: 2,
       },
+      // STEP 3 - Dati Contratto
       {
         id: "oggetto_fornitura",
         label: "Oggetto della fornitura / servizio",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "durata",
         label: "Durata del contratto",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "prezzo_totale",
         label: "Prezzo totale",
         type: "number",
         required: true,
+        step: 3,
       },
       {
         id: "modalita_pagamento",
         label: "Modalità di pagamento",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "penali_choice",
         label: "Sono previste penali?",
         type: "choice",
         required: false,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -503,30 +552,35 @@ export const DOCUMENT_SCHEMAS = {
         label: "Termini di consegna / esecuzione",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "clausola_non_concorrenza",
         label: "Clausola di non concorrenza (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_fornitore",
         label: "Firma del Fornitore",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_cliente",
         label: "Firma del Cliente",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -534,75 +588,89 @@ export const DOCUMENT_SCHEMAS = {
   // 🤝 5. Contratto di Collaborazione / Partnership
   collaborazione_partnership: {
     fields: [
+      // STEP 1 - Parte A
       {
         id: "parte_a_nome",
         label: "Nome / Ragione Sociale della Parte A",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
         mapsToPersonal: "nome",
       },
+      // STEP 2 - Parte B
       {
         id: "parte_b_nome",
         label: "Nome / Ragione Sociale della Parte B",
         type: "text",
         required: true,
+        step: 2,
       },
+      // STEP 3 - Dati Contratto
       {
         id: "oggetto",
         label: "Oggetto della collaborazione / partnership",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "durata",
         label: "Durata del contratto",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "obblighi",
         label: "Obblighi delle parti",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "ripartizione_profitti",
         label: "Ripartizione dei profitti (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "clausola_non_concorrenza",
         label: "Clausola di non concorrenza",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "proprieta_risultati",
         label: "Proprietà dei risultati / prodotti",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "recesso_anticipato",
         label: "Modalità di recesso anticipato",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_parti",
         label: "Firme delle parti",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -610,33 +678,40 @@ export const DOCUMENT_SCHEMAS = {
   // 💡 6. Licenza / Cessione Diritti
   licenza_diritti: {
     fields: [
+      // STEP 1 - Licenziante
       {
         id: "licenziante",
         label: "Nome / Ragione Sociale del Licenziante",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
         mapsToPersonal: "nome",
       },
+      // STEP 2 - Licenziatario
       {
         id: "licenziatario",
         label: "Nome / Ragione Sociale del Licenziatario",
         type: "text",
         required: true,
+        step: 2,
       },
+      // STEP 3 - Dati Licenza
       {
         id: "natura_diritto",
         label: "Natura del diritto concesso",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "esclusiva_choice",
         label: "La licenza è esclusiva?",
         type: "choice",
         required: true,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -647,36 +722,42 @@ export const DOCUMENT_SCHEMAS = {
         label: "Durata della licenza",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "compenso",
         label: "Compenso previsto",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "territorio",
         label: "Territorio di validità (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "rinnovo_anticipato",
         label: "Modalità di rinnovo anticipato (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_parti",
         label: "Firme delle parti",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -684,19 +765,23 @@ export const DOCUMENT_SCHEMAS = {
   // 👔 7. Contratto di Lavoro a Tempo Determinato
   lavoro_determinato: {
     fields: [
+      // STEP 1 - Datore di Lavoro
       {
         id: "datore_nome",
         label: "Nome / Ragione Sociale del Datore di Lavoro",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         mapsToCompany: "ragione_sociale",
       },
+      // STEP 2 - Lavoratore
       {
         id: "lavoratore_nome",
         label: "Nome completo del Lavoratore",
         type: "text",
         required: true,
+        step: 2,
         usePersonal: true,
         mapsToPersonal: "nome",
       },
@@ -705,36 +790,43 @@ export const DOCUMENT_SCHEMAS = {
         label: "Mansione / Qualifica",
         type: "text",
         required: true,
+        step: 2,
       },
+      // STEP 3 - Dati Contratto
       {
         id: "data_inizio",
         label: "Data di inizio del rapporto di lavoro",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "data_fine",
         label: "Data di fine del rapporto di lavoro",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "retribuzione_mensile",
         label: "Retribuzione mensile lorda",
         type: "number",
         required: true,
+        step: 3,
       },
       {
         id: "orario_lavoro",
         label: "Orario di lavoro settimanale",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "periodo_prova_choice",
         label: "È previsto un periodo di prova?",
         type: "choice",
         required: false,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -745,24 +837,28 @@ export const DOCUMENT_SCHEMAS = {
         label: "Benefit previsti (opzionale)",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "clausola_riservatezza",
         label: "Clausola di riservatezza",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_parti",
         label: "Firme delle parti",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -770,51 +866,61 @@ export const DOCUMENT_SCHEMAS = {
   // 🎓 8. Contratto di Stage / Tirocinio
   stage_tirocinio: {
     fields: [
+      // STEP 1 - Ente Ospitante
       {
         id: "ente_ospitante",
         label: "Nome / Ragione Sociale dell'Ente Ospitante",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         mapsToCompany: "ragione_sociale",
       },
+      // STEP 2 - Tirocinante
       {
         id: "tirocinante_nome",
         label: "Nome completo del Tirocinante",
         type: "text",
         required: true,
+        step: 2,
         usePersonal: true,
         mapsToPersonal: "nome",
       },
+      // STEP 3 - Dati Tirocinio
       {
         id: "data_inizio",
         label: "Data di inizio del tirocinio",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "data_fine",
         label: "Data di fine del tirocinio",
         type: "date",
         required: true,
+        step: 3,
       },
       {
         id: "sede",
         label: "Sede del tirocinio",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "obiettivi",
         label: "Obiettivi formativi del tirocinio",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "rimborso_choice",
         label: "È previsto un rimborso spese?",
         type: "choice",
         required: false,
+        step: 3,
         options: [
           { value: "si", label: "Sì" },
           { value: "no", label: "No" },
@@ -825,24 +931,28 @@ export const DOCUMENT_SCHEMAS = {
         label: "Nome del Tutor Aziendale",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "tutor_formativo",
         label: "Nome del Tutor Formativo",
         type: "text",
         required: false,
+        step: 3,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 3,
       },
       {
         id: "firma_parti",
         label: "Firme delle parti",
         type: "text",
         required: true,
+        step: 3,
       },
     ],
   },
@@ -850,11 +960,13 @@ export const DOCUMENT_SCHEMAS = {
   // 🧾 9. Autodichiarazione
   autodichiarazione: {
     fields: [
+      // STEP 1 - Dati Dichiarante
       {
         id: "dichiarante_nome",
         label: "Nome completo del Dichiarante",
         type: "text",
         required: true,
+        step: 1,
         usePersonal: true,
         mapsToPersonal: "nome",
       },
@@ -863,18 +975,21 @@ export const DOCUMENT_SCHEMAS = {
         label: "Luogo di nascita",
         type: "text",
         required: true,
+        step: 1,
       },
       {
         id: "data_nascita",
         label: "Data di nascita",
         type: "date",
         required: true,
+        step: 1,
       },
       {
         id: "codice_fiscale",
         label: "Codice Fiscale",
         type: "text",
         required: true,
+        step: 1,
         usePersonal: true,
         mapsToPersonal: "codice_fiscale",
       },
@@ -883,30 +998,36 @@ export const DOCUMENT_SCHEMAS = {
         label: "Indirizzo di residenza",
         type: "text",
         required: true,
+        step: 1,
       },
+      // STEP 2 - Dati Dichiarazione
       {
         id: "oggetto",
         label: "Oggetto dell'autodichiarazione",
         type: "text",
         required: true,
+        step: 2,
       },
       {
         id: "riferimenti_normativi",
         label: "Riferimenti normativi (opzionale)",
         type: "text",
         required: false,
+        step: 2,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 2,
       },
       {
         id: "firma",
         label: "Firma del Dichiarante",
         type: "text",
         required: true,
+        step: 2,
       },
     ],
   },
@@ -914,11 +1035,13 @@ export const DOCUMENT_SCHEMAS = {
   // 📬 10. Lettera Formale (PEC o Raccomandata)
   lettera_formale: {
     fields: [
+      // STEP 1 - Intestazione
       {
         id: "mittente",
         label: "Mittente",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         usePersonal: true,
         mapsToCompany: "ragione_sociale",
@@ -929,30 +1052,36 @@ export const DOCUMENT_SCHEMAS = {
         label: "Destinatario",
         type: "text",
         required: true,
+        step: 1,
       },
       {
         id: "oggetto",
         label: "Oggetto",
         type: "text",
         required: true,
+        step: 1,
       },
+      // STEP 2 - Contenuto
       {
         id: "testo",
         label: "Testo della lettera",
         type: "text",
         required: true,
+        step: 2,
       },
       {
         id: "allegati",
         label: "Allegati (opzionale)",
         type: "text",
         required: false,
+        step: 2,
       },
       {
         id: "metodo_invio",
         label: "Metodo di invio",
         type: "choice",
         required: true,
+        step: 2,
         options: [
           { value: "PEC", label: "PEC" },
           { value: "RACCOMANDATA", label: "Raccomandata" },
@@ -963,6 +1092,7 @@ export const DOCUMENT_SCHEMAS = {
         label: "Firma",
         type: "text",
         required: true,
+        step: 2,
       },
     ],
   },
@@ -970,11 +1100,13 @@ export const DOCUMENT_SCHEMAS = {
   // 🏛️ 11. DGUE / Gara Pubblica
   dgue: {
     fields: [
+      // STEP 1 - Dati Azienda
       {
         id: "azienda_nome",
         label: "Ragione Sociale dell'Azienda",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         mapsToCompany: "ragione_sociale",
       },
@@ -983,6 +1115,7 @@ export const DOCUMENT_SCHEMAS = {
         label: "Codice Fiscale / Partita IVA dell'Azienda",
         type: "text",
         required: true,
+        step: 1,
         useCompany: true,
         mapsToCompany: "codice_fiscale",
       },
@@ -991,40 +1124,49 @@ export const DOCUMENT_SCHEMAS = {
         label: "Nome del Rappresentante Legale",
         type: "text",
         required: true,
+        step: 1,
       },
+      // STEP 2 - Dati Gara
       {
         id: "riferimento_gara",
         label: "Riferimento della Gara / Procedura",
         type: "text",
         required: true,
+        step: 2,
       },
       {
         id: "documentazione",
         label: "Documentazione allegata (opzionale)",
         type: "text",
         required: false,
+        step: 2,
       },
       {
         id: "dichiarazioni_aggiuntive",
         label: "Dichiarazioni aggiuntive",
         type: "text",
         required: false,
+        step: 2,
       },
       {
         id: "luogo_data",
         label: "Luogo e data",
         type: "text",
         required: true,
+        step: 2,
       },
       {
         id: "firma",
         label: "Firma del Rappresentante Legale",
         type: "text",
         required: true,
+        step: 2,
       },
     ],
   },
 };
+
+
 
 
 
