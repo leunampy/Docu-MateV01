@@ -36,7 +36,10 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="bg-white shadow-xl rounded-2xl p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-2 text-indigo-600">DocuMate</h1>
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <img src="/logo.png" alt="DocuMate Logo" className="w-12 h-12" />
+          <h1 className="text-2xl font-bold text-indigo-600">DocuMate</h1>
+        </div>
         <p className="text-gray-500 text-center mb-6">
           Accedi o crea un account per continuare
         </p>

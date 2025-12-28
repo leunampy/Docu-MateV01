@@ -34,12 +34,12 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12"
         >
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-4">
-            Benvenuto in{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-              DocuMate
-            </span>
-          </h1>
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <img src="/logo.png" alt="DocuMate Logo" className="w-16 h-16" />
+            <h1 className="text-5xl font-bold">
+              Benvenuto in <span className="text-indigo-600">DocuMate</span>
+            </h1>
+          </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             La soluzione intelligente per creare e gestire i tuoi documenti legali e burocratici
           </p>
