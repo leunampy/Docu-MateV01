@@ -179,19 +179,19 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3 group">
-              <div className="w-12 h-12 flex items-center justify-center transform group-hover:scale-105 transition-transform">
+              <div className="w-16 h-16 flex items-center justify-center transform group-hover:scale-105 transition-transform">
                 <img 
                   src="/logo.png" 
                   alt="DocuMate Logo" 
-                  className="w-12 h-12 object-contain"
+                  className="w-16 h-16 object-contain"
                   onError={(e) => {
                     // Fallback all'icona se il logo non esiste
                     e.target.style.display = 'none';
                     e.target.nextSibling.style.display = 'flex';
                   }}
                 />
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-xl flex items-center justify-center hidden">
-                  <FileText className="w-6 h-6 text-white" />
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-xl flex items-center justify-center hidden">
+                  <FileText className="w-8 h-8 text-white" />
                 </div>
               </div>
               <div>
