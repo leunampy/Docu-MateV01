@@ -1,21 +1,37 @@
-import { base44 } from './base44Client';
+// Integrations module - placeholder for future integrations
+// Previously used base44Client, now using Supabase and other services directly
 
+import { supabase } from './supabaseClient';
 
+export const Core = {
+  UploadFile: async ({ file }) => {
+    // Upload file to Supabase Storage
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `uploads/${fileName}`;
 
+    const { data, error } = await supabase.storage
+      .from('files')
+      .upload(filePath, file);
 
-export const Core = base44.integrations.Core;
+    if (error) throw error;
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('files')
+      .getPublicUrl(filePath);
 
-export const InvokeLLM = base44.integrations.Core.InvokeLLM;
+    return {
+      file_url: publicUrl
+    };
+  }
+};
 
-export const SendEmail = base44.integrations.Core.SendEmail;
-
-export const SendSMS = base44.integrations.Core.SendSMS;
-
-export const UploadFile = base44.integrations.Core.UploadFile;
-
-export const GenerateImage = base44.integrations.Core.GenerateImage;
-
-export const ExtractDataFromUploadedFile = base44.integrations.Core.ExtractDataFromUploadedFile;
+export const InvokeLLM = null; // Use callAI from lib/ai.js instead
+export const SendEmail = null; // To be implemented
+export const SendSMS = null; // To be implemented
+export const UploadFile = Core.UploadFile;
+export const GenerateImage = null; // To be implemented
+export const ExtractDataFromUploadedFile = null; // To be implemented
 
 
 

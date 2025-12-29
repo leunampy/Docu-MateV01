@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,31 @@ export default function PersonalProfileModal({ onClose, onSave, existingProfile 
   });
 
   const saveProfileMutation = useMutation({
-    mutationFn: (data) => {
+    mutationFn: async (data) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       if (existingProfile) {
-        return base44.entities.PersonalDocumentProfile.update(existingProfile.id, data);
+        const { data: updated, error } = await supabase
+          .from('user_profiles')
+          .update(data)
+          .eq('id', existingProfile.id)
+          .eq('user_id', user.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return updated;
+      } else {
+        const { data: created, error } = await supabase
+          .from('user_profiles')
+          .insert({ ...data, user_id: user.id })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return created;
       }
-      return base44.entities.PersonalDocumentProfile.create(data);
     },
     onSuccess: () => {
       onSave();

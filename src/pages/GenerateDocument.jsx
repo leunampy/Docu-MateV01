@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { base44 } from "@/api/base44Client";
 import { ArrowLeft, ArrowRight, Home, Download, Loader2, CheckCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,20 +24,6 @@ export default function GenerateDocument() {
   const [generatedDocument, setGeneratedDocument] = useState(null);
   const [error, setError] = useState(null);
   const [limitInfo, setLimitInfo] = useState(null);
-  const [base44User, setBase44User] = useState(null);
-
-  // Carica utente base44 per compatibilità
-  React.useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await base44.auth.me();
-        setBase44User(currentUser);
-      } catch (error) {
-        setBase44User(null);
-      }
-    };
-    loadUser();
-  }, []);
 
   // Controlla limite mensile all'avvio e quando cambia l'utente
   useEffect(() => {
@@ -251,7 +236,7 @@ export default function GenerateDocument() {
         {currentStage === "questionnaire" && (
           <QuestionnaireForm
             documentType={selectedDocumentType}
-            user={base44User}
+            user={user}
             onDocumentGenerated={handleDocumentGenerated}
             onError={setError}
             onBack={handleBack}
@@ -262,7 +247,7 @@ export default function GenerateDocument() {
         {currentStage === "result" && (
           <DocumentResult
             document={generatedDocument}
-            user={base44User}
+            user={user}
             onHome={handleHome}
             onNewDocument={() => {
               setCurrentStage("category");

@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { base44 } from "@/api/base44Client";
 import { FileText, FileSignature, ArrowRight, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -188,12 +187,9 @@ export default function Home() {
         >
           <p className="text-gray-500">
             Non hai ancora un account?{" "}
-            <button
-              onClick={() => base44.auth.redirectToLogin()}
-              className="text-indigo-600 font-semibold hover:underline"
-            >
+            <Link to="/auth" className="text-indigo-600 hover:underline font-semibold">
               Registrati gratuitamente
-            </button>
+            </Link>
           </p>
         </motion.div>
       </div>

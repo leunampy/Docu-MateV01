@@ -1,12 +1,14 @@
 import React from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Download, Home, CheckCircle, Plus } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 
 export default function DocumentResult({ document: generatedDoc, user, onHome, onNewDocument }) {
+  const navigate = useNavigate();
   const downloadDocument = () => {
     if (!generatedDoc) return;
 
@@ -79,7 +81,7 @@ export default function DocumentResult({ document: generatedDoc, user, onHome, o
             <AlertDescription>
               Hai generato {user.documents_generated || 1} di 3 documenti gratuiti.{" "}
               <button
-                onClick={() => base44.auth.redirectToLogin()}
+                onClick={() => navigate(createPageUrl("AuthPage"))}
                 className="font-semibold text-blue-600 hover:underline"
               >
                 Registrati
