@@ -25,16 +25,16 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-4">
       <div className="max-w-6xl w-full">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-8 mt-4"
         >
           <h1 className="text-5xl font-bold text-center">
-            Benvenuto in <span className="text-indigo-600">DocuMate</span>
+            Benvenuti in <span className="text-indigo-600">DocuMate</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             La soluzione intelligente per creare e gestire i tuoi documenti legali e burocratici
@@ -42,7 +42,7 @@ export default function Home() {
         </motion.div>
 
         {/* Boxes Container */}
-        <div className="grid md:grid-cols-2 gap-8 relative">
+        <div className="grid md:grid-cols-2 gap-6 mt-6 relative">
           <AnimatePresence mode="wait">
             {/* Generate Documents Box */}
             <motion.div
@@ -59,15 +59,15 @@ export default function Home() {
               onClick={() => handleBoxClick("generate")}
             >
               {/* @ts-ignore */}
-              <Card className="group relative overflow-hidden cursor-pointer border-2 border-transparent hover:border-indigo-300 transition-all duration-300 bg-white h-[520px] flex flex-col">
+              <Card className="group relative overflow-hidden cursor-pointer border-2 border-transparent hover:border-indigo-300 transition-all duration-300 bg-white h-[480px] flex flex-col">
                 {/* @ts-ignore */}
-                <CardContent className="relative flex-1 p-6 space-y-4 flex flex-col">
+                <CardContent className="relative flex-1 p-5 space-y-3 flex flex-col">
                   {/* Background & Glow */}
                   <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-500" />
 
                   {/* Icon */}
-                  <div>
+                  <div className="mb-3">
                     <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                       <FileText className="w-10 h-10 text-white" />
                     </div>
@@ -125,16 +125,16 @@ export default function Home() {
               {/* @ts-ignore */}
               <Card
                 onClick={(e) => e.preventDefault()}
-                className="group relative overflow-hidden cursor-not-allowed opacity-60 border-2 border-transparent hover:border-blue-300 transition-all duration-300 bg-white h-[520px] flex flex-col"
+                className="group relative overflow-hidden cursor-not-allowed opacity-60 border-2 border-transparent hover:border-blue-300 transition-all duration-300 bg-white h-[480px] flex flex-col"
               >
                 {/* @ts-ignore */}
-                <CardContent className="relative flex-1 p-6 space-y-4 flex flex-col">
+                <CardContent className="relative flex-1 p-5 space-y-3 flex flex-col">
                   {/* Background & Glow */}
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-cyan-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500" />
 
                   {/* Icon */}
-                  <div>
+                  <div className="mb-3">
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                       <FileSignature className="w-10 h-10 text-white" />
                     </div>
