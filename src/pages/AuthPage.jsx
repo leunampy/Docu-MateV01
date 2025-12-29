@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { supabase } from "@/api/supabaseClient";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { Home } from "lucide-react";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
 export default function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const [isLogin, setIsLogin] = useState(searchParams.get('tab') !== 'register');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,7 +37,16 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="bg-white shadow-xl rounded-2xl p-8 w-full max-w-md">
+      <div className="max-w-md mx-auto w-full px-4">
+        <Link 
+          to="/" 
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-indigo-600 mb-4"
+        >
+          <Home className="w-5 h-5" />
+          <span>Home</span>
+        </Link>
+        
+        <div className="bg-white shadow-xl rounded-2xl p-8 w-full">
         <div className="flex items-center justify-center gap-2 mb-4">
           <img src="/logo.png" alt="DocuMate Logo" className="w-12 h-12" />
           <h1 className="text-2xl font-bold text-indigo-600">DocuMate</h1>
@@ -107,6 +118,7 @@ export default function AuthPage() {
             {loading ? "Attendere..." : isLogin ? "Accedi" : "Crea account"}
           </button>
         </form>
+        </div>
       </div>
     </div>
   );

@@ -61,13 +61,13 @@ export default function Home() {
               {/* @ts-ignore */}
               <Card className="group relative overflow-hidden cursor-pointer border-2 border-transparent hover:border-indigo-300 transition-all duration-300 bg-white h-[520px] flex flex-col">
                 {/* @ts-ignore */}
-                <CardContent className="relative flex-1 p-8 flex flex-col">
+                <CardContent className="relative flex-1 p-6 space-y-4 flex flex-col">
                   {/* Background & Glow */}
                   <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-500" />
 
                   {/* Icon */}
-                  <div className="mb-6">
+                  <div>
                     <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                       <FileText className="w-10 h-10 text-white" />
                     </div>
@@ -75,10 +75,10 @@ export default function Home() {
 
                   {/* Content */}
                   <div className="flex-1">
-                    <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                    <h2 className="text-3xl font-bold text-gray-900">
                       Genera Documenti
                     </h2>
-                    <p className="text-gray-600 text-lg mb-6">
+                    <p className="text-gray-600 text-lg">
                       Crea documenti legali professionali in pochi minuti attraverso un questionario guidato.
                     </p>
 
@@ -99,7 +99,7 @@ export default function Home() {
                   </div>
 
                   {/* CTA */}
-                  <div className="mt-6 flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
                       Disponibile
                     </Badge>
@@ -128,13 +128,13 @@ export default function Home() {
                 className="group relative overflow-hidden cursor-not-allowed opacity-60 border-2 border-transparent hover:border-blue-300 transition-all duration-300 bg-white h-[520px] flex flex-col"
               >
                 {/* @ts-ignore */}
-                <CardContent className="relative flex-1 p-8 flex flex-col">
+                <CardContent className="relative flex-1 p-6 space-y-4 flex flex-col">
                   {/* Background & Glow */}
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-cyan-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500" />
 
                   {/* Icon */}
-                  <div className="mb-6">
+                  <div>
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                       <FileSignature className="w-10 h-10 text-white" />
                     </div>
@@ -142,10 +142,10 @@ export default function Home() {
 
                   {/* Content */}
                   <div className="flex-1">
-                    <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                    <h2 className="text-3xl font-bold text-gray-900">
                       Compila Documenti 🚧
                     </h2>
-                    <p className="text-gray-600 text-lg mb-6">
+                    <p className="text-gray-600 text-lg">
                       Funzione in lavorazione - disponibile a breve. Compila automaticamente moduli e documenti burocratici esistenti.
                     </p>
 
@@ -166,7 +166,7 @@ export default function Home() {
                   </div>
 
                   {/* CTA */}
-                  <div className="mt-6 flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 border-yellow-200">
                       🚧 In sviluppo
                     </Badge>
@@ -187,7 +187,7 @@ export default function Home() {
         >
           <p className="text-gray-500">
             Non hai ancora un account?{" "}
-            <Link to="/auth" className="text-indigo-600 hover:underline font-semibold">
+            <Link to="/auth?tab=register" className="text-indigo-600 hover:underline font-semibold">
               Registrati gratuitamente
             </Link>
           </p>
