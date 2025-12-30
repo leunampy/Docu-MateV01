@@ -48,7 +48,7 @@ export default function AuthPage() {
         
         <div className="bg-white shadow-xl rounded-2xl p-8 w-full">
         <div className="flex flex-col items-center gap-3 mb-6">
-          <img src="/logo.png" alt="DocuMate Logo" className="w-16 h-16 rounded-2xl" />
+          <img src="/logo.png" alt="DocuMate Logo" className="w-24 h-24 rounded-2xl" />
           <h1 className="text-2xl font-bold text-indigo-600">DocuMate</h1>
         </div>
         <p className="text-gray-500 text-center mb-6">
